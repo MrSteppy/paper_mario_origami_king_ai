@@ -1,0 +1,8 @@
+[package]
+name = "paper_mario_origami_king_ai"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enum-assoc = "1.1.0"
+indoc = "2.0.5"
