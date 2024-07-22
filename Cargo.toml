@@ -3,5 +3,6 @@
 resolver = "2"
 
 members = [
-    "game_logic"
+    "game_logic",
+    "gui"
 ]
