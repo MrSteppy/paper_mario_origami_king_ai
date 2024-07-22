@@ -284,6 +284,7 @@ impl Display for TargetArea {
   }
 }
 
+//TODO add option to interrupt
 pub fn solve<'a, C>(arena: &SolvableArena, in_turns: Num, fast: bool, arena_solved_cache: C) -> Option<Vec<Move>>
 where
   C: Into<Option<&'a mut HashMap<SolvableArena, bool>>>,

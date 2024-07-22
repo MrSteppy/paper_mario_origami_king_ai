@@ -39,15 +39,19 @@ cargo run --release --package game_logic
 
 ### gui
 
-A graphical frontend, currently under development.It is planned to be available as desktop executable and android app.
+A graphical frontend. Produces a desktop executable binary and a library which can be used by the android app. 
 
 #### Running the desktop app
-```commandline
+```bash
 cargo run --release --package gui
 ```
 
-#### Running the android app
-See [Building for android](#building-for-android).
+### android_app
+
+A separate crate just used to build the android app. This is necessary since the tool that builds the app can't work 
+with a binary crate (main.rs in gui).
+
+Please see [Building for Android](#building-for-android) for details.
 
 ## Terminology
 
@@ -71,15 +75,48 @@ Negative amounts turn counterclockwise or shift towards the middle.
 
 ## Building for android
 
-This section is still experimental
+This section describes how to build an apk from the [android_app](#android_app) module. 
 
 ### Setup
 
 Install [cargo apk](https://github.com/rust-mobile/cargo-apk):
-```commandline
+```bash
 cargo install cargo-apk
 ```
 
+Install rustup targets needed to compile for android:
+```bash
+rustup target add armv7-linux-androideabi
+rustup target add aarch64-linux-android
+rustup target add i686-linux-android
+rustup target add x86_64-linux-android
+```
 
+Install the Android SDK and the NDK. The recommended way to do this, is to install Android Studio, and let it download the SDK for you.
+After that go to `Settings > Languages & Frameworks > Android SDK` and switch to the `SDK Tools` tab. There select `NDK (Side by side)`.
+Click on `Apply` and it should also download that. 
 
+Set the `ANDROID_HOME` environment variable pointing to `$HOME/Android/Sdk` (or wherever you installed the SDK)
+and the `ANDROID_NDK_HOME` variable pointing to `$ANDROID_HOME/ndk/<your ndk version>`.
 
+Last but not least, for release builds you need a `keystore.jks` file in the `android_app` module.
+You can generate one with Android Studio:
+
+Go to `Build > Generate signed App Bundle/APK`, select `APK` and press `next`.
+Now click on `Create new` and fill in the needed information. The password has to be `steptech`.
+
+### Building the apk
+
+If you've done everything right, the following script should produce an .apk file under
+`target/release/apk`:
+
+```bash
+cd android_app
+cargo apk build --release
+```
+
+For a quicker debug build omit the --release flag
+```bash
+cd android_app
+cargo apk build
+```

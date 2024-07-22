@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-game_logic = {path = "../game_logic"}
+game_logic = {path = "../game_logic"} # backend
+winit = { version = "0.30.4", features = ["android-native-activity"] } # window management
+wgpu = "22.0.0" # gpu + shaders
+pollster = "0.3.0" # block on async methods
