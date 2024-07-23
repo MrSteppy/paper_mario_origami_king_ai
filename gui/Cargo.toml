@@ -7,4 +7,6 @@ edition = "2021"
 game_logic = {path = "../game_logic"} # backend
 winit = { version = "0.30.4", features = ["android-native-activity"] } # window management
 wgpu = "22.0.0" # gpu + shaders
+env_logger = "0.11.3" # log gui errors
 pollster = "0.3.0" # block on async methods
+image = { version = "0.25.2", features = ["png"], default-features = false } # process image files
