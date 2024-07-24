@@ -1,26 +1,41 @@
 use std::iter::once;
 use std::sync::Arc;
 
-use wgpu::{
-  BlendState, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode,
-  Device, DeviceDescriptor, Face, FragmentState, FrontFace, Instance, LoadOp, MultisampleState,
-  Operations, PipelineLayoutDescriptor, PolygonMode, PresentMode, PrimitiveState,
-  PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
-  RenderPipelineDescriptor, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, StoreOp,
-  Surface, SurfaceConfiguration, SurfaceError, TextureUsages, TextureViewDescriptor, VertexState,
-};
+use glam::{Vec3, Vec4};
+use wgpu::{BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Face, FrontFace, Instance, LoadOp, MultisampleState, Operations, PolygonMode, PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureUsages, TextureViewDescriptor, VertexStepMode};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 use crate::app_state::AppState;
-use crate::resources::include_resource_str;
+use crate::shader::shader;
+use crate::shader::shader::VertexInput;
 
 const BACKGROUND_COLOR: Color = Color {
   r: 0.0,
-  g: 1.0,
+  g: 0.2,
   b: 0.0,
   a: 1.0,
 };
+
+//vertices in counter-clockwise order: top, bottom left, bottom right
+const VERTICES: &[VertexInput] = &[
+  VertexInput {
+    position: Vec3::new(0.0, 0.5, 0.0),
+    color: Vec4::new(0.0, 1.0, 0.0, 1.0),
+    _padding: 0.0,
+  },
+  VertexInput {
+    position: Vec3::new(-0.5, -0.5, 0.0),
+    color: Vec4::new(1.0, 0.0, 0.0, 1.0),
+    _padding: 0.0,
+  },
+  VertexInput {
+    position: Vec3::new(0.5, -0.5, 0.0),
+    color: Vec4::new(0.0, 0.0, 1.0, 1.0),
+    _padding: 0.0,
+  },
+];
 
 #[derive(Debug)]
 pub struct Renderer {
@@ -31,10 +46,11 @@ pub struct Renderer {
   window: Arc<Window>,
   size: PhysicalSize<u32>,
   render_pipeline: RenderPipeline,
+  vertex_buffer: Buffer,
 }
 
 /*
-TODO 
+TODO
  pipelines + shader:
   thin ring
   wide ring
@@ -88,36 +104,21 @@ impl Renderer {
 
     surface.configure(&device, &config);
 
-    let shader = device.create_shader_module(ShaderModuleDescriptor {
-      label: Some("Shader"),
-      source: ShaderSource::Wgsl(include_resource_str!(shader/shader.wgsl).into()),
-    });
-
-    let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-      label: Some("Render Pipeline Layout"),
-      bind_group_layouts: &[],
-      push_constant_ranges: &[],
-    });
+    let shader = shader::create_shader_module(&device);
+    let render_pipeline_layout = shader::create_pipeline_layout(&device);
 
     let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
       label: Some("Render Pipeline"),
       layout: Some(&render_pipeline_layout),
-      vertex: VertexState {
-        module: &shader,
-        entry_point: "vs_main",
-        compilation_options: Default::default(),
-        buffers: &[],
-      },
-      fragment: Some(FragmentState {
-        module: &shader,
-        entry_point: "fs_main",
-        compilation_options: Default::default(),
-        targets: &[Some(ColorTargetState {
+      vertex: shader::vertex_state(&shader, &shader::vs_main_entry(VertexStepMode::Vertex)),
+      fragment: Some(shader::fragment_state(
+        &shader,
+        &shader::fs_main_entry([Some(ColorTargetState {
           format: config.format,
           blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
           write_mask: ColorWrites::ALL,
-        })],
-      }),
+        })]),
+      )),
       primitive: PrimitiveState {
         topology: PrimitiveTopology::TriangleList,
         strip_index_format: None,
@@ -137,6 +138,13 @@ impl Renderer {
       cache: None, //TODO might be interesting to improve performance on android
     });
 
+    //create vertex buffer
+    let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+      label: Some("Vertex Buffer"),
+      contents: bytemuck::cast_slice(VERTICES),
+      usage: BufferUsages::VERTEX,
+    });
+
     Self {
       surface,
       device,
@@ -145,6 +153,7 @@ impl Renderer {
       window,
       size,
       render_pipeline,
+      vertex_buffer,
     }
   }
 
@@ -187,7 +196,8 @@ impl Renderer {
     });
 
     render_pass.set_pipeline(&self.render_pipeline);
-    render_pass.draw(0..3, 0..1);
+    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+    render_pass.draw(0..VERTICES.len() as u32, 0..1);
 
     drop(render_pass); //must be dropped before the encoder can be finished
 

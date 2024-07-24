@@ -129,12 +129,6 @@ cd android_app
 cargo apk build --release
 ```
 
-For a quicker debug build omit the --release flag:
-```bash
-cd android_app
-cargo apk build
-```
-
 In order to directly test the app on your phone, enable <strong>usb debugging</strong> and run the following:
 ```bash
 cd android_app

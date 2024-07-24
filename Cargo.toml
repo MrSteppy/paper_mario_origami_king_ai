@@ -7,3 +7,5 @@ members = [
   "game_logic",
   "gui"
 ]
+
+default-members = ["gui"]
