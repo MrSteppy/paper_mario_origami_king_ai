@@ -5,8 +5,14 @@ edition = "2021"
 
 [dependencies]
 game_logic = {path = "../game_logic"} # backend
-winit = { version = "0.30.4", features = ["android-native-activity"] } # window management
-wgpu = "22.0.0" # gpu + shaders
-env_logger = "0.11.3" # log gui errors
-pollster = "0.3.0" # block on async methods
-image = { version = "0.25.2", features = ["png"], default-features = false } # process image files
+winit = { version = "0.30", features = ["android-native-activity"] } # window management
+wgpu = "22.0" # gpu + shaders
+env_logger = "0.11" # log gui errors
+pollster = "0.3" # block on async methods
+image = { version = "0.25", features = ["png"], default-features = false } # process image files
+bytemuck = { version = "1.16", features = ["derive"] }
+encase = { version = "0.9", features = ["glam"] }
+glam = { version = "0.28", features = ["bytemuck"] }
+
+[build-dependencies]
+wgsl_to_wgpu = "0.8"

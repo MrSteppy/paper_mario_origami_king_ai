@@ -33,6 +33,15 @@ pub struct Renderer {
   render_pipeline: RenderPipeline,
 }
 
+/*
+TODO 
+ pipelines + shader:
+  thin ring
+  wide ring
+  lines
+  textures
+*/
+
 impl Renderer {
   pub async fn new(window: Window) -> Self {
     let window = Arc::new(window);

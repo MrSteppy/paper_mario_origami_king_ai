@@ -17,6 +17,7 @@ use crate::resources::{include_resource_bytes, load_icon};
 mod app_state;
 mod renderer;
 mod resources;
+mod shader;
 
 pub fn run(event_loop: EventLoop<AppEvent>) {
   env_logger::init();

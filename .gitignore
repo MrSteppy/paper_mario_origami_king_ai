@@ -3,3 +3,5 @@ target
 Cargo.lock
 android_app/keystore.jks
 .cargo/
+gui/src/shader.rs
+gui/src/shader
