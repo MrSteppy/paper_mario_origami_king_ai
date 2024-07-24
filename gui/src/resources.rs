@@ -45,14 +45,16 @@ impl Display for IconError {
 impl Error for IconError {}
 
 macro_rules! resource_path {
-  ($($sub_directory: ident)* $file_name: literal) => {
+  ($first:ident $(/$path: ident)*.$ext:ident) => {
     concat!(
       env!("CARGO_MANIFEST_DIR"),
       env!("PATH_SEPARATOR"),
       "resources",
-      $( env!("PATH_SEPARATOR"), stringify!($sub_directory), )*
       env!("PATH_SEPARATOR"),
-      $file_name
+      stringify!($first),
+      $( env!("PATH_SEPARATOR"), stringify!($path), )*
+      ".",
+      stringify!($ext)
     )
   };
 }
@@ -62,11 +64,11 @@ pub(crate) use resource_path;
 ///
 /// <strong>Example<strong>
 /// ```
-/// include_resource_str!(test "test.txt") //includes resources/test/test.txt
+/// include_resource_str!(test/test.txt) //includes resources/test/test.txt
 /// ```
 macro_rules! include_resource_str {
-  ($($sub_directory: ident)* $file_name: literal) => {
-    include_str!(crate::resources::resource_path!($($sub_directory)* $file_name))
+  ($first:ident $(/$path: ident)*.$ext:ident) => {
+    include_str!(crate::resources::resource_path!($first $(/$path)*.$ext))
   };
 }
 pub(crate) use include_resource_str;
@@ -75,29 +77,19 @@ pub(crate) use include_resource_str;
 ///
 /// <strong>Example<strong>
 /// ```rust
-/// include_resource_bytes!(test "test.txt") //includes resources/test/test.txt
+/// include_resource_bytes!(test/test.txt) //includes resources/test/test.txt
 /// ```
 macro_rules! include_resource_bytes {
-  ($($sub_directory: ident)* $file_name: literal) => {
-    include_bytes!(crate::resources::resource_path!($($sub_directory)* $file_name))
+  ($first:ident $(/$path: ident)*.$ext:ident) => {
+    include_bytes!(crate::resources::resource_path!($first $(/$path)*.$ext))
   };
 }
 pub(crate) use include_resource_bytes;
-
-// macro_rules! test {
-//   ($($path: ident/)* $file: ident.$ext:ident) => {
-//     concat!(stringify!($file), ".", stringify!($ext))
-//   };
-// }
-//
-// fn test() {
-//   let s = test!(hewo.exe);
-// }
 
 #[cfg(test)]
 mod test_include {
   #[test]
   fn test_include_str() {
-    assert_eq!("foo bar", include_resource_str!(test "test.txt"));
+    assert_eq!("foo bar", include_resource_str!(test/test.txt));
   }
 }

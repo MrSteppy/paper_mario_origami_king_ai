@@ -81,7 +81,7 @@ impl Renderer {
 
     let shader = device.create_shader_module(ShaderModuleDescriptor {
       label: Some("Shader"),
-      source: ShaderSource::Wgsl(include_resource_str!(shader "shader.wgsl").into()),
+      source: ShaderSource::Wgsl(include_resource_str!(shader/shader.wgsl).into()),
     });
 
     let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {

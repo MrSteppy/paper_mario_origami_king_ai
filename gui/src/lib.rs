@@ -24,7 +24,7 @@ pub fn run(event_loop: EventLoop<AppEvent>) {
   event_loop.set_control_flow(ControlFlow::Wait);
 
   let app_icon =
-    load_icon(include_resource_bytes!(icon "icon.png")).expect("failed to load app icon");
+    load_icon(include_resource_bytes!(icon/icon.png)).expect("failed to load app icon");
 
   event_loop
     .run_app(&mut App::new(app_icon))
