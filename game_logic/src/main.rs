@@ -1,4 +1,3 @@
-use std::fmt::{Debug, Display};
 use std::io::{stdin, stdout, Write};
 
 use game_logic::solving::SolvableArena;

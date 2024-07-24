@@ -1,25 +1,57 @@
-#[cfg(not(target_os = "windows"))]
-macro_rules! path_separator {
-  () => {
-    "/"
-  };
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+
+use image::ImageError;
+use winit::window::{BadIcon, Icon};
+
+pub fn load_icon(bytes: &[u8]) -> Result<Icon, IconError> {
+  let rgba = image::load_from_memory(bytes)?.to_rgba8();
+  let (width, height) = rgba.dimensions();
+  let icon = Icon::from_rgba(rgba.to_vec(), width, height)?;
+  Ok(icon)
 }
-#[cfg(target_os = "windows")]
-macro_rules! path_separator {
-  () => {
-    "\\"
-  };
+
+#[derive(Debug)]
+pub enum IconError {
+  Image(ImageError),
+  BadIcon(BadIcon),
 }
-pub(crate) use path_separator;
+
+impl From<ImageError> for IconError {
+  fn from(value: ImageError) -> Self {
+    Self::Image(value)
+  }
+}
+
+impl From<BadIcon> for IconError {
+  fn from(value: BadIcon) -> Self {
+    Self::BadIcon(value)
+  }
+}
+
+impl Display for IconError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{}",
+      match self {
+        IconError::Image(e) => e.to_string(),
+        IconError::BadIcon(e) => e.to_string(),
+      }
+    )
+  }
+}
+
+impl Error for IconError {}
 
 macro_rules! resource_path {
   ($($sub_directory: ident)* $file_name: literal) => {
     concat!(
       env!("CARGO_MANIFEST_DIR"),
-      crate::resources::path_separator!(),
+      env!("PATH_SEPARATOR"),
       "resources",
-      $( crate::resources::path_separator!(), stringify!($sub_directory), )*
-      crate::resources::path_separator!(),
+      $( env!("PATH_SEPARATOR"), stringify!($sub_directory), )*
+      env!("PATH_SEPARATOR"),
       $file_name
     )
   };
@@ -27,7 +59,7 @@ macro_rules! resource_path {
 pub(crate) use resource_path;
 
 ///Includes a file from the `resources` folder as string
-/// 
+///
 /// <strong>Example<strong>
 /// ```
 /// include_resource_str!(test "test.txt") //includes resources/test/test.txt
@@ -40,7 +72,7 @@ macro_rules! include_resource_str {
 pub(crate) use include_resource_str;
 
 ///Includes a file from the `resources` folder as bytes
-/// 
+///
 /// <strong>Example<strong>
 /// ```rust
 /// include_resource_bytes!(test "test.txt") //includes resources/test/test.txt
@@ -51,6 +83,16 @@ macro_rules! include_resource_bytes {
   };
 }
 pub(crate) use include_resource_bytes;
+
+// macro_rules! test {
+//   ($($path: ident/)* $file: ident.$ext:ident) => {
+//     concat!(stringify!($file), ".", stringify!($ext))
+//   };
+// }
+//
+// fn test() {
+//   let s = test!(hewo.exe);
+// }
 
 #[cfg(test)]
 mod test_include {

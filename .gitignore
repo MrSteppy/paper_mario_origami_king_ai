@@ -2,3 +2,4 @@
 target
 Cargo.lock
 android_app/keystore.jks
+.cargo/

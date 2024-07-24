@@ -5,6 +5,27 @@ and shifted. An integral part of a fight is to align the enemies on those rings 
 
 Which can be hard. This project aims to always find an optimal order in the least amount of turns.
 
+## Terminology
+
+### Rings (Rows)
+
+The arena consists of four rings (rows) numbered `r1` to `r4`, where smaller numbers denote the inner rings.
+
+### Columns
+
+There are 12 columns, starting at `c1` up to `c12`. The right column at the top is `c1`, from there on the number
+increases clockwise.
+
+### Moves
+
+A `Move` turns a ring or shifts a column.
+It consists of a target (row or column to turn/shift) and an amount.
+The move `r1 3` rotates the innermost ring by 3 clockwise.
+The move `c4 2` shifts the fourth column away from the center by 2.
+
+Negative amounts turn counterclockwise or shift towards the middle.
+
+
 ## Modules
 The project consists of the following modules:
 
@@ -39,7 +60,20 @@ cargo run --release --package game_logic
 
 ### gui
 
-A graphical frontend. Produces a desktop executable binary and a library which can be used by the android app. 
+A graphical frontend. Produces a desktop executable binary and a library which can be used by the android app.
+
+#### Build configuration
+
+In order to compile this crate, you need to set the environment variable `PATH_SEPARATOR`, which should denote your 
+operating systems path separator (`/` on unix and `\ ` on windows).
+
+You could achieve this by setting up a `.cargo/config.toml` in the project root:
+
+```toml
+# .cargo/config.toml
+[env]
+PATH_SEPARATOR = "/" # needs to be set to "\\" on windows 
+```
 
 #### Running the desktop app
 ```bash
@@ -52,26 +86,6 @@ A separate crate just used to build the android app. This is necessary since the
 with a binary crate (main.rs in gui).
 
 Please see [Building for Android](#building-for-android) for details.
-
-## Terminology
-
-### Rings (Rows)
-
-The arena consists of four rings (rows) numbered `r1` to `r4`, where smaller numbers denote the inner rings.
-
-### Columns
-
-There are 12 columns, starting at `c1` up to `c12`. The right column at the top is `c1`, from there on the number
-increases clockwise.
-
-### Moves
-
-A `Move` turns a ring or shifts a column. 
-It consists of a target (row or column to turn/shift) and an amount.
-The move `r1 3` rotates the innermost ring by 3 clockwise.
-The move `c4 2` shifts the fourth column away from the center by 2.
-
-Negative amounts turn counterclockwise or shift towards the middle.
 
 ## Building for android
 
@@ -115,8 +129,15 @@ cd android_app
 cargo apk build --release
 ```
 
-For a quicker debug build omit the --release flag
+For a quicker debug build omit the --release flag:
 ```bash
 cd android_app
 cargo apk build
 ```
+
+In order to directly test the app on your phone, enable <strong>usb debugging</strong> and run the following:
+```bash
+cd android_app
+cargo apk run
+```
+
