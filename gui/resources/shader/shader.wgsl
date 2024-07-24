@@ -23,7 +23,3 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   return in.color;
 }
-
-fn eq(x: f32, y: f32) -> bool {
-  return x - y < 0.001;
-}

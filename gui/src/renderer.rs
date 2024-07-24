@@ -1,15 +1,19 @@
 use std::iter::once;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use glam::{Vec3, Vec4};
-use wgpu::{BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Face, FrontFace, Instance, LoadOp, MultisampleState, Operations, PolygonMode, PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureUsages, TextureViewDescriptor, VertexStepMode};
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Face, FilterMode, IndexFormat, Instance, LoadOp, Operations, PresentMode, PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexStepMode};
+use wgpu::util::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 use crate::app_state::AppState;
-use crate::shader::shader;
+use crate::resources::include_resource_bytes;
+use crate::shader::{shader, texture_shader};
 use crate::shader::shader::VertexInput;
+
+mod pipelines;
 
 const BACKGROUND_COLOR: Color = Color {
   r: 0.0,
@@ -20,21 +24,43 @@ const BACKGROUND_COLOR: Color = Color {
 
 //vertices in counter-clockwise order: top, bottom left, bottom right
 const VERTICES: &[VertexInput] = &[
+  //top
   VertexInput {
     position: Vec3::new(0.0, 0.5, 0.0),
     color: Vec4::new(0.0, 1.0, 0.0, 1.0),
     _padding: 0.0,
   },
+  //bottom left
   VertexInput {
     position: Vec3::new(-0.5, -0.5, 0.0),
     color: Vec4::new(1.0, 0.0, 0.0, 1.0),
     _padding: 0.0,
   },
+  //bottom right
   VertexInput {
     position: Vec3::new(0.5, -0.5, 0.0),
     color: Vec4::new(0.0, 0.0, 1.0, 1.0),
     _padding: 0.0,
   },
+  //left
+  VertexInput {
+    position: Vec3::new(-0.75, 0.15, 0.0),
+    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+    _padding: 0.0,
+  },
+  //right
+  VertexInput {
+    position: Vec3::new(0.75, 0.15, 0.0),
+    color: Vec4::new(0.0, 0.0, 0.0, 1.0),
+    _padding: 0.0,
+  },
+];
+
+#[rustfmt::skip]
+const INDICES: &[u16] = &[
+  0, 3, 1,
+  0, 1, 2,
+  0, 2, 4,
 ];
 
 #[derive(Debug)]
@@ -45,17 +71,21 @@ pub struct Renderer {
   config: SurfaceConfiguration,
   window: Arc<Window>,
   size: PhysicalSize<u32>,
-  render_pipeline: RenderPipeline,
+  texture_bind_group: texture_shader::bind_groups::BindGroup0,
+  texture_pipeline: RenderPipeline,
+  tutorial_pipeline: RenderPipeline,
   vertex_buffer: Buffer,
+  index_buffer: Buffer,
 }
 
 /*
 TODO
  pipelines + shader:
-  thin ring
-  wide ring
-  lines
-  textures
+  circle
+  ring
+  line
+  texture
+  pixel (for text rendering)
 */
 
 impl Renderer {
@@ -104,45 +134,95 @@ impl Renderer {
 
     surface.configure(&device, &config);
 
-    let shader = shader::create_shader_module(&device);
-    let render_pipeline_layout = shader::create_pipeline_layout(&device);
+    //load texture
+    let sprite = image::load_from_memory(include_resource_bytes!(texture / steptech_logo.png))
+      .expect("failed to load sprite")
+      .to_rgba8();
+    let (width, height) = sprite.dimensions();
+    let texture = device.create_texture_with_data(
+      &queue,
+      &TextureDescriptor {
+        label: Some("Texture"),
+        size: Extent3d {
+          width,
+          height,
+          depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+      },
+      TextureDataOrder::default(),
+      &sprite,
+    );
+    let texture_view = texture.create_view(&TextureViewDescriptor::default());
+    let sampler = device.create_sampler(&SamplerDescriptor {
+      label: Some("Sampler"),
+      mag_filter: FilterMode::Linear,
+      ..Default::default()
+    });
+    let texture_bind_group = texture_shader::bind_groups::BindGroup0::from_bindings(
+      &device,
+      texture_shader::bind_groups::BindGroupLayout0 {
+        texture: &texture_view,
+        t_sampler: &sampler,
+      },
+    );
 
-    let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+    //texture pipeline
+    let texture_shader = texture_shader::create_shader_module(&device);
+    let color_target_state = [Some(ColorTargetState {
+      format: config.format,
+      blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+      write_mask: ColorWrites::ALL,
+    })];
+    let texture_pipeline_layout = texture_shader::create_pipeline_layout(&device);
+    let texture_vertex_entry = texture_shader::vs_main_entry(VertexStepMode::Vertex);
+    let texture_fragment_entry = texture_shader::fs_main_entry(color_target_state.clone());
+    let texture_pipeline_descriptor = RenderPipelineDescriptor {
+      layout: Some(&texture_pipeline_layout),
+      vertex: texture_shader::vertex_state(&texture_shader, &texture_vertex_entry),
+      fragment: Some(texture_shader::fragment_state(
+        &texture_shader,
+        &texture_fragment_entry,
+      )),
+      primitive: PrimitiveState {
+        cull_mode: Some(Face::Back),
+        ..Default::default()
+      },
       label: Some("Render Pipeline"),
-      layout: Some(&render_pipeline_layout),
+      depth_stencil: None,
+      multisample: Default::default(),
+      multiview: None,
+      cache: None, //TODO might be interesting to improve performance on android
+    };
+    let texture_pipeline = device.create_render_pipeline(&texture_pipeline_descriptor);
+
+    //tutorial render pipeline
+    let shader = shader::create_shader_module(&device);
+    let tutorial_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+      layout: Some(&shader::create_pipeline_layout(&device)),
       vertex: shader::vertex_state(&shader, &shader::vs_main_entry(VertexStepMode::Vertex)),
       fragment: Some(shader::fragment_state(
         &shader,
-        &shader::fs_main_entry([Some(ColorTargetState {
-          format: config.format,
-          blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-          write_mask: ColorWrites::ALL,
-        })]),
+        &shader::fs_main_entry(color_target_state.clone()),
       )),
-      primitive: PrimitiveState {
-        topology: PrimitiveTopology::TriangleList,
-        strip_index_format: None,
-        front_face: FrontFace::Ccw,
-        cull_mode: Some(Face::Back),
-        polygon_mode: PolygonMode::Fill,
-        unclipped_depth: false,
-        conservative: false,
-      },
-      depth_stencil: None,
-      multisample: MultisampleState {
-        count: 1,
-        mask: !0,
-        alpha_to_coverage_enabled: false,
-      },
-      multiview: None,
-      cache: None, //TODO might be interesting to improve performance on android
+      ..texture_pipeline_descriptor.clone()
     });
 
-    //create vertex buffer
     let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
       label: Some("Vertex Buffer"),
       contents: bytemuck::cast_slice(VERTICES),
       usage: BufferUsages::VERTEX,
+    });
+
+    let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+      label: Some("Index Buffer"),
+      contents: bytemuck::cast_slice(INDICES),
+      usage: BufferUsages::INDEX,
     });
 
     Self {
@@ -152,8 +232,11 @@ impl Renderer {
       config,
       window,
       size,
-      render_pipeline,
+      texture_bind_group,
+      texture_pipeline,
+      tutorial_pipeline,
       vertex_buffer,
+      index_buffer,
     }
   }
 
@@ -190,16 +273,16 @@ impl Renderer {
           store: StoreOp::Store,
         },
       })],
-      depth_stencil_attachment: None,
-      timestamp_writes: None,
-      occlusion_query_set: None,
+      ..Default::default()
     });
 
-    render_pass.set_pipeline(&self.render_pipeline);
+    render_pass.set_pipeline(&self.tutorial_pipeline);
     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    render_pass.draw(0..VERTICES.len() as u32, 0..1);
+    render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+    render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 
     drop(render_pass); //must be dropped before the encoder can be finished
+
 
     self.queue.submit(once(encoder.finish()));
     canvas.present();

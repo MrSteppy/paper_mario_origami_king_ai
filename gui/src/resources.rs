@@ -90,6 +90,6 @@ pub(crate) use include_resource_bytes;
 mod test_include {
   #[test]
   fn test_include_str() {
-    assert_eq!("foo bar", include_resource_str!(test/test.txt));
+    assert_eq!("foo bar", include_resource_str!(test/test_data.txt));
   }
 }

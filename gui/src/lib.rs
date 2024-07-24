@@ -25,13 +25,14 @@ pub fn run(event_loop: EventLoop<AppEvent>) {
   event_loop.set_control_flow(ControlFlow::Wait);
 
   let app_icon =
-    load_icon(include_resource_bytes!(icon/icon.png)).expect("failed to load app icon");
+    load_icon(include_resource_bytes!(icon / app_icon.png)).expect("failed to load app icon");
 
   event_loop
     .run_app(&mut App::new(app_icon))
     .expect("failed to run app");
 
   //send animation tick every 50ms (20tps)
+  //TODO stop sending when app gets suspended -> maybe a Ticker struct
   thread::spawn(move || {
     while proxy.send_event(AppEvent::AnimationTick).is_ok() {
       thread::sleep(Duration::from_millis(50));
