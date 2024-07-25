@@ -2,41 +2,10 @@ use std::num::NonZeroU64;
 use std::ops::{Deref, DerefMut};
 
 use bytemuck::NoUninit;
-use wgpu::{Buffer, BufferUsages, Device, Queue, RenderPipeline};
+use wgpu::{Buffer, BufferUsages, Device, Queue};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 pub mod texture_pipeline;
-
-#[derive(Debug)]
-pub struct PipelineWrapper {
-  pub pipeline: RenderPipeline,
-  pub vertex_buffer: BufferWrapper,
-  pub index_buffer: BufferWrapper,
-}
-
-impl PipelineWrapper {
-  pub fn new<V, I>(
-    pipeline: RenderPipeline,
-    vertex_buffer_descriptor: V,
-    index_buffer_descriptor: I,
-  ) -> Self
-  where
-    V: Into<Option<BufferInfo>>,
-    I: Into<Option<BufferInfo>>,
-  {
-    Self {
-      pipeline,
-      vertex_buffer: BufferWrapper::new(BufferDescriptor::from_info(
-        vertex_buffer_descriptor.into().unwrap_or_default(),
-        BufferUsages::VERTEX,
-      )),
-      index_buffer: BufferWrapper::new(BufferDescriptor::from_info(
-        index_buffer_descriptor.into().unwrap_or_default(),
-        BufferUsages::INDEX,
-      )),
-    }
-  }
-}
 
 ///A wrapper around a [`Buffer`] which keeps track of the number of elements inside the [`Buffer`]
 /// and allocates a new one with more space if needed
@@ -162,10 +131,4 @@ impl BufferInfo {
   }
 }
 
-pub trait HasVertexBuffer {
-  fn vertex_buffer(&mut self, device: &Device, queue: &Queue) -> &Buffer;
-}
 
-pub trait HasIndexBuffer {
-  fn index_buffer(&mut self, device: &Device, queue: &Queue) -> &Buffer;
-}

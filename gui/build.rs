@@ -25,6 +25,7 @@ fn main() {
       .to_string();
 
     if let Some(shader_name) = file_name.strip_suffix(".wgsl").map(|s| s.to_string()) {
+      //TODO support shader including
       let shader_source = fs::read_to_string(&path).expect("failed to read shader file");
       let shader_module_source = create_shader_module(
         &shader_source,

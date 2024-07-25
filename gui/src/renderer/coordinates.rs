@@ -1,56 +1,32 @@
-//Texture: 2x TexClip, 3x Clip
+//Texture: TexRect, Square
 //Triangle: 3x Clip, Color
 //Line: 2x Clip, Color
 //Pixel: 1x Clip, Color
-//Circle: Area, PixelSize, TexClip, radius: f32, degrees: f32..f32, Color
-//Ring: Area, TexClip, max_radius: f32, min_radius: f32, degrees: f32..f32, Color
+//Circle: Square, Size, CircleCenter, TexCoords, degrees: f32..f32, Color
+//Ring: Square, TexCoords, TexCoords..TexCoords, degrees: f32..f32, Color
+
+// Pixel:2xu32
+// Size:2xu32
+// PTexCoords:2xf32
+// Rect:2xPixel
+// CircleCenter:PTexCoords|Pixel
+// TexCoords:PTexCoords|Size+Pixel
+// TexRect:2xTexCoords|Size+Rect
+// Clip:4xf32|TexCoords
+// Square:3xClip|TexRect
+
+//CPU conversions:
+// Square / TexCoords... => Clip...
+// Square / TexRect => Square
+// Size / Pixel... => TexCoords...
+// Size / Rect => TexRect
+
+//TODO cpu conversions
 
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, AddAssign, BitOr, Deref, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::Add;
 
-use glam::Vec4;
-
-///Describes the absolute size of a texture in pixels
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct PixelSize {
-  pub width: u32,
-  pub height: u32,
-}
-
-impl PixelSize {
-  pub fn new(width: u32, height: u32) -> Self {
-    Self { width, height }
-  }
-
-  pub fn convert_pixel(&self, pixel: Pixel) -> TexClip {
-    TexClip::new(
-      percent_to_clip(pixel.x as f32 / self.width as f32),
-      percent_to_clip(pixel.y as f32 / self.height as f32),
-    )
-  }
-}
-
-impl BitOr<Pixel> for PixelSize {
-  type Output = TexClip;
-
-  fn bitor(self, rhs: Pixel) -> Self::Output {
-    self.convert_pixel(rhs)
-  }
-}
-
-impl<const N: usize> BitOr<[Pixel; N]> for PixelSize {
-  type Output = [TexClip; N];
-
-  fn bitor(self, rhs: [Pixel; N]) -> Self::Output {
-    rhs.map(|pixel| self.convert_pixel(pixel))
-  }
-}
-
-fn percent_to_clip(percent: f32) -> f32 {
-  2.0 * percent - 1.0
-}
-
-///Denotes a pixel, where (0, 0) is the one in the top left corner
+///Denotes a pixel on a canvas or texture
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
 pub struct Pixel {
   pub x: u32,
@@ -63,363 +39,323 @@ impl Pixel {
   }
 }
 
-///two [`TexClip`]s describing the top left and bottom right corners of a square on a texture
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct TexArea {
-  pub top_left_corner: TexClip,
-  pub bottom_right_corner: TexClip,
-}
-
-impl Default for TexArea {
-  fn default() -> Self {
-    Self::from([TexClip::new(-1.0, 1.0), TexClip::new(1.0, -1.0)])
+impl Display for Pixel {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{} {}]", self.x, self.y)
   }
 }
 
-impl From<[TexClip; 2]> for TexArea {
-  fn from(value: [TexClip; 2]) -> Self {
-    Self {
-      top_left_corner: value[0],
-      bottom_right_corner: value[1],
-    }
+///Describes the size of a canvas, texture or square area
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct Size {
+  pub width: u32,
+  pub height: u32,
+}
+
+impl Size {
+  pub fn new(width: u32, height: u32) -> Self {
+    Self { width, height }
   }
 }
 
-impl From<TexArea> for [TexClip; 2] {
-  fn from(value: TexArea) -> Self {
-    [value.top_left_corner, value.bottom_right_corner]
+impl Display for Size {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}x{}", self.width, self.height)
   }
 }
 
-impl TexArea {
-  pub fn bottom_left_corner(&self) -> TexClip {
-    TexClip::new(
-      self.top_left_corner.x / self.top_left_corner.w,
-      self.bottom_right_corner.y / self.bottom_right_corner.w,
-    )
-  }
-}
-
-///two-dimensional [`Clip`]s, for a texture
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct TexClip {
+///Describes a point on a texture, canvas or square area relative to its size, where a value of 0.0
+/// means top/left corner and 1.0 means bottom/right
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
+pub struct PTexCoords {
   pub x: f32,
   pub y: f32,
-  pub w: f32,
 }
 
-impl Default for TexClip {
-  fn default() -> Self {
-    Self {
-      x: 0.0,
-      y: 0.0,
-      w: 1.0,
-    }
-  }
-}
-
-impl TexClip {
+impl PTexCoords {
   pub fn new(x: f32, y: f32) -> Self {
-    Self { x, y, w: 1.0 }
+    Self { x, y }
   }
 }
 
-///A hyper area, described by three of its corners: top left, bottom left, bottom right. The fourth
-/// corner can be obtained by mirroring the described triangle
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct ClipArea {
-  pub top_left_corner: Clip,
-  pub bottom_left_corner: Clip,
-  pub bottom_right_corner: Clip,
-}
-
-impl Default for ClipArea {
-  fn default() -> Self {
-    Self::from([
-      Clip::new(-1.0, 1.0, 0.0),
-      Clip::new(-1.0, -1.0, 0.0),
-      Clip::new(1.0, -1.0, 0.0),
-    ])
+impl Display for PTexCoords {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[{}% {}%]", self.x * 100.0, self.y * 100.0)
   }
 }
 
-impl From<[Clip; 3]> for ClipArea {
-  fn from(value: [Clip; 3]) -> Self {
+///A rectangle described by two [`Pixel`]s which denote the top left corner and the bottom right one
+/// of the rectangle
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct Rect {
+  pub top_left: Pixel,
+  pub bottom_right: Pixel,
+}
+
+impl From<[Pixel; 2]> for Rect {
+  fn from(value: [Pixel; 2]) -> Self {
     Self {
-      top_left_corner: value[0],
-      bottom_left_corner: value[1],
-      bottom_right_corner: value[2],
+      top_left: value[0],
+      bottom_right: value[1],
     }
   }
 }
 
-impl ClipArea {
-  pub fn top_right_corner(&self) -> Clip {
-    self.top_left_corner + self.bottom_right_corner - self.bottom_left_corner
-  }
-
-  pub fn apply_tex_clip(&self, tex_clip: TexClip) -> Clip {
-    let x_percent = clip_to_percent(tex_clip.x / tex_clip.w);
-    let y_percent = clip_to_percent(tex_clip.y / tex_clip.w);
-
-    let x_dir = (self.bottom_right_corner - self.bottom_left_corner).adjust_w(1.0);
-    let y_dir = (self.bottom_left_corner - self.top_left_corner).adjust_w(1.0);
-
-    self.top_left_corner + x_dir * x_percent + y_dir * y_percent
-  }
-
-  pub fn sub_area(&self, tex_area: TexArea) -> Self {
-    (*self
-      | [
-        tex_area.top_left_corner,
-        tex_area.bottom_left_corner(),
-        tex_area.bottom_right_corner,
-      ])
-    .into()
-  }
-}
-
-impl BitOr<TexClip> for ClipArea {
-  type Output = Clip;
-
-  fn bitor(self, rhs: TexClip) -> Self::Output {
-    self.apply_tex_clip(rhs)
-  }
-}
-
-impl<const N: usize> BitOr<[TexClip; N]> for ClipArea {
-  type Output = [Clip; N];
-
-  fn bitor(self, rhs: [TexClip; N]) -> Self::Output {
-    rhs.map(|tex_clip| self.apply_tex_clip(tex_clip))
-  }
-}
-
-impl BitOr<TexArea> for ClipArea {
-  type Output = Self;
-
-  fn bitor(self, rhs: TexArea) -> Self::Output {
-    self.sub_area(rhs)
-  }
-}
-
-impl BitOr<PixelSize> for ClipArea {
-  type Output = SizedClipArea;
-
-  fn bitor(self, rhs: PixelSize) -> Self::Output {
-    SizedClipArea {
-      area: self,
-      size: rhs,
+impl Rect {
+  pub fn new(top_left: Pixel, bottom_right: Pixel) -> Self {
+    Self {
+      top_left,
+      bottom_right,
     }
   }
 }
 
-fn clip_to_percent(clip: f32) -> f32 {
-  (clip + 1.0) / 2.0
+impl Display for Rect {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}->{}", self.top_left, self.bottom_right)
+  }
 }
 
-///Represents clip coordinates: x, y, z and a scale w.
-/// In order to be visible on a normal screen, `x / w` and `y / w` must be in `-1.0..1.0` and
-/// `z / w` must be in `0.0..1.0`
+///Describes where the center of a circle is located
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Clip {
-  pub x: f32,
-  pub y: f32,
-  pub z: f32,
-  pub w: f32,
+pub enum CircleCenter {
+  PTexCoords(PTexCoords),
+  Pixel(Pixel),
+}
+
+impl Default for CircleCenter {
+  fn default() -> Self {
+    Self::PTexCoords(PTexCoords::new(0.5, 0.5))
+  }
+}
+
+impl From<PTexCoords> for CircleCenter {
+  fn from(value: PTexCoords) -> Self {
+    Self::PTexCoords(value)
+  }
+}
+
+impl From<Pixel> for CircleCenter {
+  fn from(value: Pixel) -> Self {
+    Self::Pixel(value)
+  }
+}
+
+impl Display for CircleCenter {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      CircleCenter::PTexCoords(p_tex_coords) => Display::fmt(p_tex_coords, f),
+      CircleCenter::Pixel(pixel) => Display::fmt(pixel, f),
+    }
+  }
+}
+
+///Denote a pixel on a texture
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TexCoords {
+  Relative(PTexCoords),
+  Absolute {
+    ///the size of the texture
+    size: Size,
+    ///the exact pixel
+    pixel: Pixel,
+  },
+}
+
+impl Default for TexCoords {
+  fn default() -> Self {
+    Self::Relative(PTexCoords::default())
+  }
+}
+
+impl From<PTexCoords> for TexCoords {
+  fn from(value: PTexCoords) -> Self {
+    Self::Relative(value)
+  }
+}
+
+impl TexCoords {
+  pub fn new(x: f32, y: f32) -> Self {
+    Self::from(PTexCoords::new(x, y))
+  }
+}
+
+impl Add<Pixel> for Size {
+  type Output = TexCoords;
+
+  fn add(self, rhs: Pixel) -> Self::Output {
+    TexCoords::Absolute {
+      size: self,
+      pixel: rhs,
+    }
+  }
+}
+
+impl Display for TexCoords {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      TexCoords::Relative(p_tex_coords) => Display::fmt(p_tex_coords, f),
+      TexCoords::Absolute { size, pixel } => {
+        write!(f, "[{} / {}]", size, pixel)
+      }
+    }
+  }
+}
+
+///Denote a rectangle of pixels on a texture
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TexRect {
+  Relative {
+    top_left: TexCoords,
+    bottom_right: TexCoords,
+  },
+  Absolute {
+    size: Size,
+    rect: Rect,
+  },
+}
+
+impl From<[TexCoords; 2]> for TexRect {
+  fn from(value: [TexCoords; 2]) -> Self {
+    Self::Relative {
+      top_left: value[0],
+      bottom_right: value[1],
+    }
+  }
+}
+
+impl TexRect {
+  pub fn new<T, B>(top_left: T, bottom_right: B) -> Self
+  where
+    T: Into<TexCoords>,
+    B: Into<TexCoords>,
+  {
+    Self::Relative {
+      top_left: top_left.into(),
+      bottom_right: bottom_right.into(),
+    }
+  }
+}
+
+impl<R> Add<R> for Size
+where
+  R: Into<Rect>,
+{
+  type Output = TexRect;
+
+  fn add(self, rhs: R) -> Self::Output {
+    TexRect::Absolute {
+      size: self,
+      rect: rhs.into(),
+    }
+  }
+}
+
+impl Display for TexRect {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      TexRect::Relative {
+        top_left,
+        bottom_right,
+      } => write!(f, "{}->{}", top_left, bottom_right),
+      TexRect::Absolute { size, rect } => write!(f, "{} / {}", size, rect),
+    }
+  }
+}
+
+///Describes a clip coordinate in 3d space. For kind `Screen` the clip
+/// is relative to the area of `[-1.0, 1.0]->[1.0, -1.0]` in z = `0.0`.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Clip {
+  Raw { x: f32, y: f32, z: f32, w: f32 },
+  Screen(TexCoords),
 }
 
 impl Default for Clip {
   fn default() -> Self {
-    Self {
-      x: 0.0,
-      y: 0.0,
-      z: 0.0,
-      w: 1.0,
-    }
+    Self::new(0.0, 0.0, 0.0)
+  }
+}
+
+impl From<TexCoords> for Clip {
+  fn from(value: TexCoords) -> Self {
+    Self::Screen(value)
   }
 }
 
 impl Clip {
   pub fn new(x: f32, y: f32, z: f32) -> Self {
-    Self { x, y, z, w: 1.0 }
+    Self::with_w(x, y, z, 1.0)
   }
 
-  pub fn adjust_w(self, w: f32) -> Self {
-    let mut adjusted = self * (w / self.w);
-    adjusted.w = w;
-    adjusted
+  pub fn with_w(x: f32, y: f32, z: f32, w: f32) -> Self {
+    Self::Raw { x, y, z, w }
   }
-}
 
-impl From<Vec4> for Clip {
-  fn from(value: Vec4) -> Self {
-    Self {
-      x: value.x,
-      y: value.y,
-      z: value.z,
-      w: value.w,
-    }
-  }
-}
-
-impl From<Clip> for Vec4 {
-  fn from(value: Clip) -> Self {
-    Vec4::new(value.x, value.y, value.z, value.w)
-  }
-}
-
-impl Mul<f32> for Clip {
-  type Output = Self;
-
-  fn mul(mut self, rhs: f32) -> Self::Output {
-    self.x *= rhs;
-    self.y *= rhs;
-    self.z *= rhs;
-    self
-  }
-}
-
-impl Mul<Clip> for f32 {
-  type Output = Clip;
-
-  fn mul(self, rhs: Clip) -> Self::Output {
-    rhs * self
-  }
-}
-
-impl MulAssign<f32> for Clip {
-  fn mul_assign(&mut self, rhs: f32) {
-    *self = *self * rhs
-  }
-}
-
-impl Div<f32> for Clip {
-  type Output = Self;
-
-  fn div(mut self, rhs: f32) -> Self::Output {
-    self.x /= rhs;
-    self.y /= rhs;
-    self.z /= rhs;
-    self
-  }
-}
-
-impl DivAssign<f32> for Clip {
-  fn div_assign(&mut self, rhs: f32) {
-    *self = *self / rhs
-  }
-}
-
-impl Add for Clip {
-  type Output = Self;
-
-  fn add(mut self, mut rhs: Self) -> Self::Output {
-    self *= rhs.w;
-    rhs *= self.w;
-    self.x += rhs.x;
-    self.y += rhs.y;
-    self.z += rhs.z;
-    self.w *= rhs.w;
-    self
-  }
-}
-
-impl AddAssign for Clip {
-  fn add_assign(&mut self, rhs: Self) {
-    *self = *self + rhs
-  }
-}
-
-impl Sub for Clip {
-  type Output = Self;
-
-  fn sub(self, rhs: Self) -> Self::Output {
-    self + -1.0 * rhs
-  }
-}
-
-impl SubAssign for Clip {
-  fn sub_assign(&mut self, rhs: Self) {
-    *self = *self - rhs
+  pub fn screen<T>(tex_coords: T) -> Self
+  where
+    T: Into<TexCoords>,
+  {
+    Self::Screen(tex_coords.into())
   }
 }
 
 impl Display for Clip {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, self.w)
+    match self {
+      Clip::Raw { x, y, z, w } => write!(f, "({}, {}, {}, {})", x, y, z, w),
+      Clip::Screen(tex_coords) => write!(f, "(screen / {})", tex_coords),
+    }
   }
 }
 
+///Denotes a square in 3d clip space. For kind `Screen` the square
+/// is relative to the area of `[-1.0, 1.0]->[1.0, -1.0]` in z = `0.0`.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct SizedClipArea {
-  pub area: ClipArea,
-  pub size: PixelSize,
+pub enum Square {
+  Span {
+    top_left: Clip,
+    bottom_left: Clip,
+    bottom_right: Clip,
+  },
+  Screen(TexRect),
 }
 
-impl Deref for SizedClipArea {
-  type Target = ClipArea;
-
-  fn deref(&self) -> &Self::Target {
-    &self.area
+impl Default for Square {
+  fn default() -> Self {
+    Self::Span {
+      top_left: Clip::new(-1.0, 1.0, 0.0),
+      bottom_left: Clip::new(-1.0, -1.0, 0.0),
+      bottom_right: Clip::new(1.0, -1.0, 0.0),
+    }
   }
 }
 
-impl BitOr<Pixel> for SizedClipArea {
-  type Output = Clip;
-
-  fn bitor(self, rhs: Pixel) -> Self::Output {
-    self.area | (self.size | rhs)
+impl From<[Clip; 3]> for Square {
+  fn from(value: [Clip; 3]) -> Self {
+    Self::Span {
+      top_left: value[0],
+      bottom_left: value[1],
+      bottom_right: value[2],
+    }
   }
 }
 
-impl<const N: usize> BitOr<[Pixel; N]> for SizedClipArea {
-  type Output = [Clip; N];
-
-  fn bitor(self, rhs: [Pixel; N]) -> Self::Output {
-    self.area | (self.size | rhs)
+impl From<TexRect> for Square {
+  fn from(value: TexRect) -> Self {
+    Self::Screen(value)
   }
 }
 
-#[cfg(test)]
-mod test {
-  use crate::renderer::coordinates::clip_to_percent;
-
-  #[test]
-  fn test_clip_to_percent() {
-    assert_eq!(0.5, clip_to_percent(0.0));
-    assert_eq!(0.0, clip_to_percent(-1.0));
-    assert_eq!(1.0, clip_to_percent(1.0));
-  }
-}
-
-#[cfg(test)]
-mod test_conversions {
-  use crate::renderer::coordinates::{Clip, ClipArea, Pixel, PixelSize};
-
-  #[test]
-  fn test_pixel_to_clips() {
-    let pixel1 = Pixel::new(4, 4);
-    let pixel2 = Pixel::new(16, 8);
-    let size = PixelSize::new(32, 16);
-
-    let clip1 = Clip::new(-0.75, 0.5, 0.0);
-    let clip2 = Clip::new(0.0, 0.0, 0.0);
-
-    let area = ClipArea::default();
-
-    assert_eq!([clip1, clip2], area | size | [pixel1, pixel2]);
-  }
-}
-
-#[cfg(test)]
-mod test_clip_area {
-  use crate::renderer::coordinates::{Clip, ClipArea, TexClip};
-
-  #[test]
-  fn test_apply_tex_clip_to_square() {
-    let area = ClipArea::default();
-    let tex_clip = TexClip::new(1.0, 0.0);
-    assert_eq!(Clip::new(1.0, 0.0, 0.0), area | tex_clip);
+impl Display for Square {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Square::Span {
+        top_left,
+        bottom_left,
+        bottom_right,
+      } => write!(f, "{}->{}->{}", top_left, bottom_left, bottom_right),
+      Square::Screen(tex_rect) => write!(f, "screen / {}", tex_rect),
+    }
   }
 }
