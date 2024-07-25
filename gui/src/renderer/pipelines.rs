@@ -5,8 +5,10 @@ use bytemuck::NoUninit;
 use wgpu::{Buffer, BufferUsages, Device, Queue, RenderPipeline};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
+pub mod texture_pipeline;
+
 #[derive(Debug)]
-struct PipelineWrapper {
+pub struct PipelineWrapper {
   pub pipeline: RenderPipeline,
   pub vertex_buffer: BufferWrapper,
   pub index_buffer: BufferWrapper,
@@ -39,7 +41,7 @@ impl PipelineWrapper {
 ///A wrapper around a [`Buffer`] which keeps track of the number of elements inside the [`Buffer`]
 /// and allocates a new one with more space if needed
 #[derive(Debug)]
-struct BufferWrapper {
+pub struct BufferWrapper {
   descriptor: BufferDescriptor,
   buffer: Option<Buffer>,
   data: Vec<u8>,
@@ -158,4 +160,12 @@ impl BufferInfo {
     self.label = Some(label.to_string());
     self
   }
+}
+
+pub trait HasVertexBuffer {
+  fn vertex_buffer(&mut self, device: &Device, queue: &Queue) -> &Buffer;
+}
+
+pub trait HasIndexBuffer {
+  fn index_buffer(&mut self, device: &Device, queue: &Queue) -> &Buffer;
 }

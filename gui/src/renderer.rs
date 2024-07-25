@@ -14,6 +14,7 @@ use crate::shader::{shader, texture_shader};
 use crate::shader::shader::VertexInput;
 
 mod pipelines;
+mod coordinates;
 
 const BACKGROUND_COLOR: Color = Color {
   r: 0.0,
