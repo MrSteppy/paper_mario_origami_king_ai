@@ -4,3 +4,4 @@ Cargo.lock
 android_app/keystore.jks
 .cargo/
 gui/src/shader
+gui/src/shader.rs

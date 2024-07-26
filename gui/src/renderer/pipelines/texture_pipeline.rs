@@ -1,5 +1,4 @@
 use wgpu::{Device, Queue, RenderPass, RenderPipeline};
-use wgpu::util::RenderEncoder;
 
 use crate::renderer::coordinates::{Square, TexRect};
 use crate::renderer::pipelines::BufferWrapper;

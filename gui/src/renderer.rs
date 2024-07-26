@@ -1,5 +1,4 @@
 use std::iter::once;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use glam::{Vec3, Vec4};

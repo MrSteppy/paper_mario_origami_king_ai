@@ -1,6 +1,7 @@
 use std::{fs, io};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use wgsl_to_wgpu::{create_shader_module, MatrixVectorTypes, WriteOptions};
 
@@ -8,14 +9,10 @@ const INCLUDE_HOOK_POINT: &str = "INCLUDE_HOOK_POINT";
 const NO_STANDALONE: &str = "//no-standalone";
 
 fn main() {
-  println!("cargo::rerun-if-changed=resources/shader/*");
-  println!("cargo::rerun-if-changed=src/shader/*");
-
-  let shader_module_directory = Path::new("src/shader");
-  fs::create_dir_all(shader_module_directory).expect("failed to create shader module directory");
-  let mut shader_module_names = vec![];
+  println!("cargo::rerun-if-changed=resources/shader/**");
 
   let shader_directory = Path::new("resources/shader");
+  let mut shader_rs_source = String::new();
 
   for entry in fs::read_dir(shader_directory)
     .expect("failed to open shader directory")
@@ -54,30 +51,18 @@ fn main() {
         &format!("r#\"\n{}\"#", pre_process_info.source_code),
       );
 
-      fs::write(
-        Path::new("src/shader").join(format!("{}.rs", shader_name)),
-        shader_module_source,
-      )
-      .expect("failed to save shader module");
-      shader_module_names.push(shader_name);
+      shader_rs_source += &format!("pub mod {} {{\n{}\n}}\n", shader_name, shader_module_source);
 
       println!("Ok!");
     }
   }
 
-  println!("Adding modules to shader.rs...");
-
-  let module_header_path = Path::new("src/shader.rs");
-  let mut module_header_source =
-    fs::read_to_string(module_header_path).expect("failed to read shader.rs");
-  for module_name in shader_module_names {
-    println!("- {}", module_name);
-    let mod_declaration = format!("pub mod {};", module_name);
-    if !module_header_source.contains(&mod_declaration) {
-      module_header_source = format!("{}\n{}", mod_declaration, module_header_source);
-    }
+  let shader_rs_path = Path::new("src").join("shader.rs");
+  fs::write(&shader_rs_path, shader_rs_source).expect("failed to create shader.rs");
+  //try running rust fmt on the file
+  if let Ok(mut process) = Command::new("rustfmt").arg(shader_rs_path).spawn() {
+    let _ = process.wait();
   }
-  fs::write(module_header_path, module_header_source).expect("failed to modify module shader.rs");
 }
 
 fn pre_process_shader<P>(shader_file: P) -> Result<PreProcessingInfo, PreProcessingError>
