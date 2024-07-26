@@ -8,11 +8,12 @@
 // Pixel:2xu32
 // Size:2xu32
 // PTexCoords:2xf32
+// PClip:4xf32
 // Rect:2xPixel
 // CircleCenter:PTexCoords|Pixel
 // TexCoords:PTexCoords|Size+Pixel
 // TexRect:2xTexCoords|Size+Rect
-// Clip:4xf32|TexCoords
+// Clip:PClip|TexCoords
 // Square:3xClip|TexRect
 
 //CPU conversions:
@@ -21,10 +22,81 @@
 // Size / Pixel... => TexCoords...
 // Size / Rect => TexRect
 
-//TODO cpu conversions
-
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::Add;
+use std::ops::{Add, Div, Mul, Sub};
+
+use glam::{Vec3, Vec4};
+
+impl Div<TexCoords> for Square {
+  type Output = Clip;
+
+  fn div(self, rhs: TexCoords) -> Self::Output {
+    let p_tex = rhs.as_p_tex_coords();
+    let x_percent = clip_to_percent(p_tex.x);
+    let y_percent = clip_to_percent(p_tex.y);
+
+    let [top_left, bottom_left, bottom_right] = self.as_array().map(|clip| clip.as_p_clip());
+
+    let x_direction = bottom_right - bottom_left;
+    let y_direction = bottom_left - top_left;
+
+    (top_left + x_percent * x_direction + y_percent * y_direction).into()
+  }
+}
+
+fn clip_to_percent(clip: f32) -> f32 {
+  (clip + 1.0) / 2.0
+}
+
+impl<const N: usize> Div<[TexCoords; N]> for Square {
+  type Output = [Clip; N];
+
+  fn div(self, rhs: [TexCoords; N]) -> Self::Output {
+    rhs.map(|tex_coords| self / tex_coords)
+  }
+}
+
+impl Div<TexRect> for Square {
+  type Output = Square;
+
+  fn div(self, rhs: TexRect) -> Self::Output {
+    let [top_left, bottom_right] = rhs.into();
+    let bottom_left = TexCoords::new(
+      PTexCoords::from(top_left).x,
+      PTexCoords::from(bottom_right).y,
+    );
+    (self / [top_left, bottom_left, bottom_right]).into()
+  }
+}
+
+impl Div<Pixel> for Size {
+  type Output = TexCoords;
+
+  fn div(self, rhs: Pixel) -> Self::Output {
+    TexCoords::new(
+      self.width as f32 / rhs.x as f32,
+      self.height as f32 / rhs.y as f32,
+    )
+  }
+}
+
+impl<const N: usize> Div<[Pixel; N]> for Size {
+  type Output = [TexCoords; N];
+
+  fn div(self, rhs: [Pixel; N]) -> Self::Output {
+    rhs.map(|pixel| self / pixel)
+  }
+}
+
+impl Div<Rect> for Size {
+  type Output = TexRect;
+
+  fn div(self, rhs: Rect) -> Self::Output {
+    TexRect::new(self / rhs.top_left, self / rhs.bottom_right)
+  }
+}
+
+//coordinates
 
 ///Denotes a pixel on a canvas or texture
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
@@ -81,6 +153,94 @@ impl PTexCoords {
 impl Display for PTexCoords {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}% {}%]", self.x * 100.0, self.y * 100.0)
+  }
+}
+
+/// A point in clip coordinate space.
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
+pub struct PClip {
+  pub x: f32,
+  pub y: f32,
+  pub z: f32,
+  pub w: f32,
+}
+
+impl From<Vec4> for PClip {
+  fn from(value: Vec4) -> Self {
+    Self {
+      x: value.x,
+      y: value.y,
+      z: value.z,
+      w: value.w,
+    }
+  }
+}
+
+impl From<Vec3> for PClip {
+  fn from(value: Vec3) -> Self {
+    Self::new(value.x, value.y, value.z)
+  }
+}
+
+impl PClip {
+  pub fn new(x: f32, y: f32, z: f32) -> Self {
+    Self { x, y, z, w: 1.0 }
+  }
+
+  pub fn xyz(&self) -> Vec3 {
+    Vec3::new(self.x, self.y, self.z)
+  }
+}
+
+impl From<PClip> for Vec4 {
+  fn from(value: PClip) -> Self {
+    Self::new(value.x, value.y, value.z, value.w)
+  }
+}
+
+impl Add for PClip {
+  type Output = Self;
+
+  fn add(self, rhs: Self) -> Self::Output {
+    (self.xyz() * rhs.w + rhs.xyz() * self.w).extend(self.w * rhs.w).into()
+  }
+}
+
+impl Sub for PClip {
+  type Output = Self;
+
+  fn sub(self, rhs: Self) -> Self::Output {
+    self + -1.0 * rhs
+  }
+}
+
+impl Mul<f32> for PClip {
+  type Output = Self;
+
+  fn mul(self, rhs: f32) -> Self::Output {
+    (self.xyz() * rhs).extend(self.w).into()
+  }
+}
+
+impl Mul<PClip> for f32 {
+  type Output = PClip;
+
+  fn mul(self, rhs: PClip) -> Self::Output {
+    rhs * self
+  }
+}
+
+impl Div<f32> for PClip {
+  type Output = Self;
+
+  fn div(self, rhs: f32) -> Self::Output {
+    self * (1.0 / rhs)
+  }
+}
+
+impl Display for PClip {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, self.w)
   }
 }
 
@@ -141,6 +301,18 @@ impl From<Pixel> for CircleCenter {
   }
 }
 
+impl CircleCenter {
+  pub fn as_tex_coords<S>(&self, size: S) -> TexCoords
+  where
+    S: Into<Size>,
+  {
+    match *self {
+      CircleCenter::PTexCoords(coords) => coords.into(),
+      CircleCenter::Pixel(pixel) => size.into() / pixel,
+    }
+  }
+}
+
 impl Display for CircleCenter {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -178,6 +350,14 @@ impl TexCoords {
   pub fn new(x: f32, y: f32) -> Self {
     Self::from(PTexCoords::new(x, y))
   }
+
+  #[inline]
+  pub fn as_p_tex_coords(&self) -> PTexCoords {
+    match *self {
+      TexCoords::Relative(coords) => coords,
+      TexCoords::Absolute { size, pixel } => (size / pixel).as_p_tex_coords()
+    }
+  }
 }
 
 impl Add<Pixel> for Size {
@@ -188,6 +368,12 @@ impl Add<Pixel> for Size {
       size: self,
       pixel: rhs,
     }
+  }
+}
+
+impl From<TexCoords> for PTexCoords {
+  fn from(value: TexCoords) -> Self {
+    value.as_p_tex_coords()
   }
 }
 
@@ -235,6 +421,16 @@ impl TexRect {
       bottom_right: bottom_right.into(),
     }
   }
+
+  pub fn as_array(&self) -> [TexCoords; 2] {
+    match *self {
+      TexRect::Relative {
+        top_left,
+        bottom_right,
+      } => [top_left, bottom_right],
+      TexRect::Absolute { size, rect } => (size / rect).into(),
+    }
+  }
 }
 
 impl<R> Add<R> for Size
@@ -248,6 +444,12 @@ where
       size: self,
       rect: rhs.into(),
     }
+  }
+}
+
+impl From<TexRect> for [TexCoords; 2] {
+  fn from(value: TexRect) -> Self {
+    value.as_array()
   }
 }
 
@@ -267,13 +469,19 @@ impl Display for TexRect {
 /// is relative to the area of `[-1.0, 1.0]->[1.0, -1.0]` in z = `0.0`.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Clip {
-  Raw { x: f32, y: f32, z: f32, w: f32 },
+  Raw(PClip),
   Screen(TexCoords),
 }
 
 impl Default for Clip {
   fn default() -> Self {
     Self::new(0.0, 0.0, 0.0)
+  }
+}
+
+impl From<PClip> for Clip {
+  fn from(value: PClip) -> Self {
+    Self::Raw(value)
   }
 }
 
@@ -285,11 +493,7 @@ impl From<TexCoords> for Clip {
 
 impl Clip {
   pub fn new(x: f32, y: f32, z: f32) -> Self {
-    Self::with_w(x, y, z, 1.0)
-  }
-
-  pub fn with_w(x: f32, y: f32, z: f32, w: f32) -> Self {
-    Self::Raw { x, y, z, w }
+    Self::from(PClip::new(x, y, z))
   }
 
   pub fn screen<T>(tex_coords: T) -> Self
@@ -298,12 +502,26 @@ impl Clip {
   {
     Self::Screen(tex_coords.into())
   }
+
+  #[inline]
+  pub fn as_p_clip(&self) -> PClip {
+    match *self {
+      Clip::Raw(inner) => inner,
+      Clip::Screen(tex_coords) => (Square::default() / tex_coords).as_p_clip()
+    }
+  }
+}
+
+impl From<Clip> for PClip {
+  fn from(value: Clip) -> Self {
+    value.as_p_clip()
+  }
 }
 
 impl Display for Clip {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
-      Clip::Raw { x, y, z, w } => write!(f, "({}, {}, {}, {})", x, y, z, w),
+      Clip::Raw(inner) => Display::fmt(inner, f),
       Clip::Screen(tex_coords) => write!(f, "(screen / {})", tex_coords),
     }
   }
@@ -344,6 +562,38 @@ impl From<[Clip; 3]> for Square {
 impl From<TexRect> for Square {
   fn from(value: TexRect) -> Self {
     Self::Screen(value)
+  }
+}
+
+impl Square {
+  pub fn new<T, R, S>(top_left: T, bottom_left: R, bottom_right: S) -> Self
+  where
+    T: Into<Clip>,
+    R: Into<Clip>,
+    S: Into<Clip>,
+  {
+    Self::Span {
+      top_left: top_left.into(),
+      bottom_left: bottom_left.into(),
+      bottom_right: bottom_right.into(),
+    }
+  }
+
+  pub fn as_array(&self) -> [Clip; 3] {
+    match *self {
+      Square::Span {
+        top_left,
+        bottom_left,
+        bottom_right,
+      } => [top_left, bottom_left, bottom_right],
+      Square::Screen(tex_rect) => (Square::default() / tex_rect).into(),
+    }
+  }
+}
+
+impl From<Square> for [Clip; 3] {
+  fn from(value: Square) -> Self {
+    value.as_array()
   }
 }
 
