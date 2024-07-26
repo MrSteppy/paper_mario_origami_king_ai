@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use glam::{Vec3, Vec4};
-use wgpu::{BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Face, FilterMode, IndexFormat, Instance, LoadOp, Operations, PresentMode, PrimitiveState, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexStepMode};
+use wgpu::{BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Face, FilterMode, IndexFormat, Instance, LoadOp, Operations, PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexStepMode};
 use wgpu::util::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -143,7 +143,7 @@ impl Renderer {
     let texture = device.create_texture_with_data(
       &queue,
       &TextureDescriptor {
-        label: Some("Texture"),
+        label: Some("StepTechLogo"),
         size: Extent3d {
           width,
           height,
@@ -191,6 +191,7 @@ impl Renderer {
         &texture_fragment_entry,
       )),
       primitive: PrimitiveState {
+        topology: PrimitiveTopology::TriangleStrip,
         cull_mode: Some(Face::Back),
         ..Default::default()
       },
