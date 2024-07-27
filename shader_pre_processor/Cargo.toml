@@ -1,0 +1,8 @@
+[package]
+name = "shader_pre_processor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+once-cell-regex = "0.2.1"
+enum-assoc = "1.1.0"

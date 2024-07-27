@@ -6,6 +6,6 @@ members = [
   "android_app",
   "game_logic",
   "gui"
-]
+, "shader_pre_processor"]
 
 default-members = ["gui"]
