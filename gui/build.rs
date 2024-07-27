@@ -1,12 +1,14 @@
-use std::{fs, io};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{fs, io};
 
 use wgsl_to_wgpu::{create_shader_module, MatrixVectorTypes, WriteOptions};
 
 const INCLUDE_HOOK_POINT: &str = "INCLUDE_HOOK_POINT";
 const NO_STANDALONE: &str = "//no-standalone";
+const INCLUDE: &str = "//include ";
+const INCLUDE_ONLY_ONCE: &str = "//once";
 
 fn main() {
   println!("cargo::rerun-if-changed=resources/shader/**");
@@ -29,7 +31,7 @@ fn main() {
     if let Some(shader_name) = file_name.strip_suffix(".wgsl").map(|s| s.to_string()) {
       println!("Processing shader {}...", shader_name);
 
-      let pre_process_info = pre_process_shader(path).expect("failed to pre-process shader");
+      let pre_process_info = pre_process_shader(path, None).expect("failed to pre-process shader");
       if pre_process_info.no_standalone {
         println!("No standalone - ignoring");
         continue;
@@ -65,9 +67,13 @@ fn main() {
   }
 }
 
-fn pre_process_shader<P>(shader_file: P) -> Result<PreProcessingInfo, PreProcessingError>
+fn pre_process_shader<'a, P, I>(
+  shader_file: P,
+  included_files: I,
+) -> Result<PreProcessingInfo, PreProcessingError>
 where
   P: AsRef<Path>,
+  I: Into<Option<&'a HashSet<String>>>,
 {
   let shader_source = fs::read_to_string(&shader_file).map_err(|e| PreProcessingError::IO {
     error: e,
@@ -75,20 +81,31 @@ where
   })?;
 
   let mut info = PreProcessingInfo {
-    included_files: Default::default(),
-    source_code: String::new(),
-    no_standalone: false,
+    included_files: included_files.into().cloned().unwrap_or_default(),
+    ..Default::default()
   };
-  for line in shader_source.lines() {
-    if line.starts_with(NO_STANDALONE) {
+  for line in shader_source.lines().map(|line| line.trim_end()) {
+    if line == NO_STANDALONE {
       info.no_standalone = true;
       continue;
     }
 
-    if let Some(include) = line.strip_prefix("//include ") {
+    if line == INCLUDE_ONLY_ONCE {
+      info.include_only_once = true;
+      continue;
+    }
+
+    if let Some(include) = line.strip_prefix(INCLUDE) {
       let include_file = shader_file.as_ref().parent().unwrap().join(include);
-      info.source_code += &pre_process_shader(include_file)?.source_code;
+      let include_file_info = pre_process_shader(include_file, &info.included_files)?;
+      if include_file_info.include_only_once && info.included_files.contains(include) {
+        continue;
+      }
+      info.source_code += &include_file_info.source_code;
       info.included_files.insert(include.to_string());
+      for included_file in include_file_info.included_files {
+        info.included_files.insert(included_file);
+      }
       continue;
     }
 
@@ -98,11 +115,12 @@ where
   Ok(info)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct PreProcessingInfo {
   pub included_files: HashSet<String>,
   pub source_code: String,
   pub no_standalone: bool,
+  pub include_only_once: bool,
 }
 
 #[allow(dead_code)]

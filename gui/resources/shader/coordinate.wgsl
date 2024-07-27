@@ -1,4 +1,5 @@
 //no-standalone
+//once
 
 struct Pixel {
   x: u32,
