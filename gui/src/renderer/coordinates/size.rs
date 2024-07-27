@@ -1,9 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use glam::UVec2;
-
-use crate::renderer::coordinates::WGSLRepr;
-
 ///Describes the size of a canvas, texture or square area
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Size {
@@ -20,13 +16,5 @@ impl Size {
 impl Display for Size {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}x{}", self.width, self.height)
-  }
-}
-
-impl WGSLRepr for Size {
-  type Repr = UVec2;
-
-  fn to_wgsl_repr(self) -> Self::Repr {
-    UVec2::new(self.width, self.height)
   }
 }

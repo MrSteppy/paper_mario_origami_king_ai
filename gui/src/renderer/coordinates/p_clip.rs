@@ -3,8 +3,6 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use glam::{Vec3, Vec4};
 
-use crate::renderer::coordinates::WGSLRepr;
-
 /// A point in clip coordinate space.
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct PClip {
@@ -86,13 +84,5 @@ impl Div<f32> for PClip {
 impl Display for PClip {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, self.w)
-  }
-}
-
-impl WGSLRepr for PClip {
-  type Repr = Vec4;
-
-  fn to_wgsl_repr(self) -> Self::Repr {
-    Vec4::new(self.x, self.y, self.z, self.w)
   }
 }

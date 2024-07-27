@@ -1,9 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use glam::UVec4;
-
 use crate::renderer::coordinates::pixel::Pixel;
-use crate::renderer::coordinates::WGSLRepr;
 
 ///A rectangle described by two [`Pixel`]s which denote the top left corner and the bottom right one
 /// of the rectangle
@@ -34,16 +31,5 @@ impl Rect {
 impl Display for Rect {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}->{}", self.top_left, self.bottom_right)
-  }
-}
-
-impl WGSLRepr for Rect {
-  type Repr = UVec4;
-
-  fn to_wgsl_repr(self) -> Self::Repr {
-    UVec4::from((
-      self.top_left.to_wgsl_repr(),
-      self.bottom_right.to_wgsl_repr(),
-    ))
   }
 }

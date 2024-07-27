@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::renderer::coordinates::p_tex_coords::PTexCoords;
 use crate::renderer::coordinates::pixel::Pixel;
 use crate::renderer::coordinates::size::Size;
-use crate::renderer::coordinates::{TexCoords, WGSLRepr};
+use crate::renderer::coordinates::TexCoords;
 
 ///Describes where the center of a circle is located
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -48,13 +48,5 @@ impl Display for CircleCenter {
       CircleCenter::PTexCoords(p_tex_coords) => Display::fmt(p_tex_coords, f),
       CircleCenter::Pixel(pixel) => Display::fmt(pixel, f),
     }
-  }
-}
-
-impl WGSLRepr for CircleCenter {
-  type Repr = ();
-
-  fn to_wgsl_repr(self) -> Self::Repr {
-    todo!()
   }
 }

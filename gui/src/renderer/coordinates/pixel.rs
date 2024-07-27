@@ -22,9 +22,8 @@ impl Display for Pixel {
 }
 
 impl FloatArrayRepr for Pixel {
-  const N: usize = 2;
 
-  fn to_float_array(self) -> [f32; Self::N] {
-    [self.x as f32, self.y as f32]
+  fn to_float_array(self) -> Vec<f32> {
+    vec![self.x as f32, self.y as f32]
   }
 }

@@ -1,9 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use glam::Vec2;
-
-use crate::renderer::coordinates::WGSLRepr;
-
 ///Describes a point on a texture, canvas or square area relative to its size, where a value of 0.0
 /// means top/left corner and 1.0 means bottom/right
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
@@ -21,13 +17,5 @@ impl PTexCoords {
 impl Display for PTexCoords {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "[{}% {}%]", self.x * 100.0, self.y * 100.0)
-  }
-}
-
-impl WGSLRepr for PTexCoords {
-  type Repr = Vec2;
-
-  fn to_wgsl_repr(self) -> Self::Repr {
-    Vec2::new(self.x, self.y)
   }
 }

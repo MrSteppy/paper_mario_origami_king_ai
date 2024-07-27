@@ -43,20 +43,14 @@ impl Div<TexCoords> for Square {
 
   fn div(self, rhs: TexCoords) -> Self::Output {
     let p_tex = rhs.as_p_tex_coords();
-    let x_percent = clip_to_percent(p_tex.x);
-    let y_percent = clip_to_percent(p_tex.y);
 
     let [top_left, bottom_left, bottom_right] = self.as_array().map(|clip| clip.as_p_clip());
 
     let x_direction = bottom_right - bottom_left;
     let y_direction = bottom_left - top_left;
 
-    (top_left + x_percent * x_direction + y_percent * y_direction).into()
+    (top_left + p_tex.x * x_direction + p_tex.y * y_direction).into()
   }
-}
-
-fn clip_to_percent(clip: f32) -> f32 {
-  (clip + 1.0) / 2.0
 }
 
 impl<const N: usize> Div<[TexCoords; N]> for Square {
@@ -398,18 +392,5 @@ impl Display for Square {
 }
 
 pub trait FloatArrayRepr {
-  const N: usize;
-
-  fn to_float_array(self) -> [f32; Self::N];
-
-  fn concat<const A: usize, const B: usize, T>(a: [T; A], b: [T; B]) -> [T; A + B] {
-    a.into_iter().chain(b.into_iter()).try_into().unwrap()
-  }
-}
-
-#[deprecated]
-pub trait WGSLRepr {
-  type Repr;
-
-  fn to_wgsl_repr(self) -> Self::Repr;
+  fn to_float_array(self) -> Vec<f32>;
 }
