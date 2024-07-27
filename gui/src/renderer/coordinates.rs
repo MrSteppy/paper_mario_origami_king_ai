@@ -5,16 +5,16 @@
 //Circle: Square, Size, CircleCenter, TexCoords, degrees: f32..f32, Color
 //Ring: Square, TexCoords, TexCoords..TexCoords, degrees: f32..f32, Color
 
-// Pixel:2xu32
-// Size:2xu32
-// PTexCoords:2xf32
-// PClip:4xf32
-// Rect:2xPixel
-// CircleCenter:PTexCoords|Pixel
-// TexCoords:PTexCoords|Size+Pixel
-// TexRect:2xTexCoords|Size+Rect
-// Clip:PClip|TexCoords
-// Square:3xClip|TexRect
+// Pixel:2xu32 - vec2<u32>
+// Size:2xu32 - vec2<u32>
+// PTexCoords:2xf32 - vec2<f32>
+// PClip:4xf32 - vec4<f32>
+// Rect:2xPixel - vec4<u32>
+// CircleCenter:PTexCoords|Pixel - vec4<f32>: ptex|pixel
+// TexCoords:PTexCoords|Size+Pixel - vec4<f32>: size?|?pixel:ptex
+// TexRect:2xTexCoords|Size+Rect - mat3x4<f32>: size?|-,?(rect,-):(tex,tex)
+// Clip:PClip|TexCoords - mat2x4<f32>: ?|-,?tex:pclip
+// Square:3xClip|TexRect - mat4x4<f32>: ?|-,?texrect:(clip,clip,clip)
 
 //CPU conversions:
 // Square / TexCoords... => Clip...
@@ -28,11 +28,14 @@ use std::ops::{Add, Div, Mul, Sub};
 use p_clip::PClip;
 use p_tex_coords::PTexCoords;
 use pixel::Pixel;
+use rect::Rect;
 use size::Size;
 
+mod circle_center;
 mod p_clip;
 mod p_tex_coords;
 mod pixel;
+mod rect;
 mod size;
 
 impl Div<TexCoords> for Square {
@@ -105,84 +108,6 @@ impl Div<Rect> for Size {
 }
 
 //coordinates
-
-///A rectangle described by two [`Pixel`]s which denote the top left corner and the bottom right one
-/// of the rectangle
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct Rect {
-  pub top_left: Pixel,
-  pub bottom_right: Pixel,
-}
-
-impl From<[Pixel; 2]> for Rect {
-  fn from(value: [Pixel; 2]) -> Self {
-    Self {
-      top_left: value[0],
-      bottom_right: value[1],
-    }
-  }
-}
-
-impl Rect {
-  pub fn new(top_left: Pixel, bottom_right: Pixel) -> Self {
-    Self {
-      top_left,
-      bottom_right,
-    }
-  }
-}
-
-impl Display for Rect {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}->{}", self.top_left, self.bottom_right)
-  }
-}
-
-///Describes where the center of a circle is located
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum CircleCenter {
-  PTexCoords(PTexCoords),
-  Pixel(Pixel),
-}
-
-impl Default for CircleCenter {
-  fn default() -> Self {
-    Self::PTexCoords(PTexCoords::new(0.5, 0.5))
-  }
-}
-
-impl From<PTexCoords> for CircleCenter {
-  fn from(value: PTexCoords) -> Self {
-    Self::PTexCoords(value)
-  }
-}
-
-impl From<Pixel> for CircleCenter {
-  fn from(value: Pixel) -> Self {
-    Self::Pixel(value)
-  }
-}
-
-impl CircleCenter {
-  pub fn as_tex_coords<S>(&self, size: S) -> TexCoords
-  where
-    S: Into<Size>,
-  {
-    match *self {
-      CircleCenter::PTexCoords(coords) => coords.into(),
-      CircleCenter::Pixel(pixel) => size.into() / pixel,
-    }
-  }
-}
-
-impl Display for CircleCenter {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match self {
-      CircleCenter::PTexCoords(p_tex_coords) => Display::fmt(p_tex_coords, f),
-      CircleCenter::Pixel(pixel) => Display::fmt(pixel, f),
-    }
-  }
-}
 
 ///Denote a pixel on a texture
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -475,5 +400,5 @@ impl Display for Square {
 pub trait WGSLRepr {
   type Repr;
 
-  fn convert(&self) -> Self::Repr;
+  fn to_wgsl_repr(self) -> Self::Repr;
 }

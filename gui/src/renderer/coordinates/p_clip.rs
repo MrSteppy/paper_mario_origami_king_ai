@@ -92,7 +92,7 @@ impl Display for PClip {
 impl WGSLRepr for PClip {
   type Repr = Vec4;
 
-  fn convert(&self) -> Self::Repr {
+  fn to_wgsl_repr(self) -> Self::Repr {
     Vec4::new(self.x, self.y, self.z, self.w)
   }
 }

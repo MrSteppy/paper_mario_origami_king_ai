@@ -27,7 +27,7 @@ impl Display for PTexCoords {
 impl WGSLRepr for PTexCoords {
   type Repr = Vec2;
 
-  fn convert(&self) -> Self::Repr {
+  fn to_wgsl_repr(self) -> Self::Repr {
     Vec2::new(self.x, self.y)
   }
 }

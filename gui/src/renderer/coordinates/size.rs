@@ -26,7 +26,7 @@ impl Display for Size {
 impl WGSLRepr for Size {
   type Repr = UVec2;
 
-  fn convert(&self) -> Self::Repr {
+  fn to_wgsl_repr(self) -> Self::Repr {
     UVec2::new(self.width, self.height)
   }
 }
