@@ -1,10 +1,14 @@
 use std::{fs, io};
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use enum_assoc::Assoc;
 use once_cell_regex::regex;
+
+mod memory_layout;
 
 ///The prefix of every pre-processor statement
 pub const STMT_PREFIX: &str = "#";
@@ -44,14 +48,16 @@ pub struct StatementInfo {
 
 ///Pre-processes a shader file. Will return None when pre-processing is cancelled early because file
 /// has already been included or should not be processed as standalone.
-pub fn pre_process_shader<P>(
+pub fn pre_process_shader<'a, P, C>(
   shader_file: P,
-  context: ProcessContext,
+  context: C,
 ) -> Result<Option<PreProcessedShaderInfo>, PreProcessingError>
 where
   P: AsRef<Path>,
+  C: Into<ProcessContext<'a>>,
 {
   let shader_file = shader_file.as_ref();
+  let context = context.into();
 
   let shader_source = fs::read_to_string(shader_file).map_err(|e| PreProcessingError::IO {
     error: e,
@@ -63,6 +69,7 @@ where
     ..Default::default()
   };
   for (line_index, line) in shader_source.lines().enumerate() {
+    let line_nr = line_index + 1;
     if Statement::NoStandalone.match_info(line).is_some() {
       info.no_standalone = true;
       if let ProcessContext::Standalone = &context {
@@ -73,18 +80,17 @@ where
 
     if Statement::IncludeOnlyOnce.match_info(line).is_some() {
       info.include_only_once = true;
-      if let ProcessContext::Include {
-        previous_includes, ..
-      } = &context
+      let shader_file_str = shader_file
+        .to_str()
+        .expect("shader file path not valid utf-8, should not have been able to be included")
+        .to_string();
+      if context
+        .join(&info)
+        .previous_includes
+        .contains(&shader_file_str)
       {
-        let shader_file_str = shader_file
-          .to_str()
-          .expect("shader file path not valid utf-8, should not have been able to be included")
-          .to_string();
-        if previous_includes.contains(&shader_file_str) {
-          return Ok(None);
-        }
-      }
+        return Ok(None);
+      };
       continue;
     }
 
@@ -103,6 +109,27 @@ where
     }
 
     if let Some(stmt_info) = Statement::GenRepr.match_info(line) {
+      let mut args = stmt_info.arg_str.split_whitespace();
+      let target_name = args.next().ok_or(PreProcessingError::statement(
+        shader_file,
+        line_nr,
+        line,
+        "Missing target name: For which struct shall the repr be generated?",
+      ))?;
+      let repr_name = args
+        .next()
+        .map(|s| s.to_string())
+        .unwrap_or(format!("{}Repr", target_name));
+
+      let target_definition = context
+        .join(&info)
+        .previous_struct_definitions
+        .iter()
+        .find(|definition| definition.name == target_name)
+        .ok_or(PreProcessingError::statement(shader_file, line_nr, line, format!("Can't find a struct with the name '{}'. Make sure it was defined before this statement!", target_name)))?;
+
+
+
       //TODO generate struct representation
       continue;
     }
@@ -124,43 +151,58 @@ where
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct IncludeContext<'a> {
+  pub previous_includes: HashSet<&'a String>,
+  pub previous_struct_definitions: Vec<&'a StructDefinition>,
+}
+
+impl<'a> IncludeContext<'a> {
+  pub fn join(&'a self, info: &'a PreProcessedShaderInfo) -> IncludeContext<'a> {
+    let mut context = Self::from(info);
+    for &include in &self.previous_includes {
+      context.previous_includes.insert(include);
+    }
+    for &struct_def in &self.previous_struct_definitions {
+      context.previous_struct_definitions.push(struct_def);
+    }
+
+    context
+  }
+}
+
+impl<'a> From<&'a PreProcessedShaderInfo> for IncludeContext<'a> {
+  fn from(value: &'a PreProcessedShaderInfo) -> Self {
+    let mut context = Self::default();
+
+    for include in &value.included_files {
+      context.previous_includes.insert(include);
+    }
+    for struct_definition in &value.struct_definitions {
+      context.previous_struct_definitions.push(struct_definition);
+    }
+
+    context
+  }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub enum ProcessContext<'a> {
   #[default]
   Standalone,
-  Include {
-    previous_includes: HashSet<&'a String>,
-    previous_struct_definitions: Vec<&'a StructDefinition>,
-  },
+  Include(IncludeContext<'a>),
+}
+
+impl<'a> From<IncludeContext<'a>> for ProcessContext<'a> {
+  fn from(value: IncludeContext<'a>) -> Self {
+    Self::Include(value)
+  }
 }
 
 impl<'a> ProcessContext<'a> {
-  pub fn join(&'a self, info: &'a PreProcessedShaderInfo) -> ProcessContext<'a> {
-    let mut includes = HashSet::new();
-    let mut struct_definitions = vec![];
-
-    for include in &info.included_files {
-      includes.insert(include);
-    }
-    for struct_definition in &info.struct_definitions {
-      struct_definitions.push(struct_definition);
-    }
-
-    if let ProcessContext::Include {
-      previous_includes,
-      previous_struct_definitions,
-    } = self
-    {
-      for include in previous_includes {
-        includes.insert(include);
-      }
-      for struct_definition in previous_struct_definitions {
-        struct_definitions.push(struct_definition);
-      }
-    }
-
-    Self::Include {
-      previous_includes: includes,
-      previous_struct_definitions: struct_definitions,
+  pub fn join(&'a self, info: &'a PreProcessedShaderInfo) -> IncludeContext<'a> {
+    match self {
+      ProcessContext::Standalone => IncludeContext::from(info),
+      ProcessContext::Include(inner) => inner.join(info),
     }
   }
 }
@@ -205,8 +247,55 @@ pub struct GeneratedRepresentation {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum PreProcessingError {
-  IO { error: io::Error, file: PathBuf },
+  IO {
+    error: io::Error,
+    file: PathBuf,
+  },
+  Statement {
+    file: PathBuf,
+    line_nr: usize,
+    line: String,
+    detail_message: String,
+  },
 }
+
+impl PreProcessingError {
+  pub fn statement<P, L, S>(file: P, line_nr: usize, line: L, detail_message: S) -> Self
+  where
+    P: AsRef<Path>,
+    L: ToString,
+    S: ToString,
+  {
+    Self::Statement {
+      file: file.as_ref().to_path_buf(),
+      line_nr,
+      line: line.to_string(),
+      detail_message: detail_message.to_string(),
+    }
+  }
+}
+
+impl Display for PreProcessingError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      PreProcessingError::IO { error, file } => {
+        write!(f, "IO error with file {:?}: {}", file, error)
+      }
+      PreProcessingError::Statement {
+        file,
+        line_nr,
+        line,
+        detail_message,
+      } => write!(
+        f,
+        "Invalid statement at {:?}:{} near '{}': {}",
+        file, line_nr, line, detail_message
+      ),
+    }
+  }
+}
+
+impl Error for PreProcessingError {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct StructDefinition {
