@@ -1,7 +1,9 @@
-//once
+#no-standalone
+#once
 
-//include coordinates/pixel.wgsl
-//include coordinates/size.wgsl
-//include coordinates/p_tex_coords.wgsl
-//include coordinates/p_clip.wgsl
-//include coordinates/rect.wgsl
+struct Pixel {
+  x: u32,
+  y: u32,
+}
+
+#genRepr Pixel

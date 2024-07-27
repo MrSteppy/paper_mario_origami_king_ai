@@ -10,9 +10,11 @@ wgpu = "22.0" # gpu + shaders
 env_logger = "0.11" # log gui errors
 pollster = "0.3" # block on async methods
 image = { version = "0.25", features = ["png"], default-features = false } # process image files
-bytemuck = { version = "1.16", features = ["derive"] }
-encase = { version = "0.9", features = ["glam"] }
-glam = { version = "0.28", features = ["bytemuck"] }
+bytemuck = { version = "1.16", features = ["derive"] } # convert data to bytes
+encase = { version = "0.9", features = ["glam"] } # idk, but something with wgsl
+glam = { version = "0.28", features = ["bytemuck"] } # matrices and vectors
 
 [build-dependencies]
-wgsl_to_wgpu = "0.8"
+wgsl_to_wgpu = "0.8" # parse shaders at compile time
+regex = "1.10" # shader file pre-processing
+lazy_static = "1.5" # regex caching

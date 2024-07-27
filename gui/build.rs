@@ -1,14 +1,20 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 use std::{fs, io};
 
+use lazy_static::lazy_static;
+use regex::Regex;
 use wgsl_to_wgpu::{create_shader_module, MatrixVectorTypes, WriteOptions};
 
 const INCLUDE_HOOK_POINT: &str = "INCLUDE_HOOK_POINT";
-const NO_STANDALONE: &str = "//no-standalone";
-const INCLUDE: &str = "//include ";
-const INCLUDE_ONLY_ONCE: &str = "//once";
+///The prefix of every pre-processor statement
+const STMT_PREFIX: &str = "#";
+const NO_STANDALONE: &str = "no-standalone";
+const INCLUDE: &str = "include";
+const INCLUDE_ONLY_ONCE: &str = "once";
+const GEN_REPR: &str = "genRepr";
 
 fn main() {
   println!("cargo::rerun-if-changed=resources/shader/**");
@@ -31,7 +37,12 @@ fn main() {
     if let Some(shader_name) = file_name.strip_suffix(".wgsl").map(|s| s.to_string()) {
       println!("Processing shader {}...", shader_name);
 
-      let pre_process_info = pre_process_shader(path, None).expect("failed to pre-process shader");
+      let pre_process_info = pre_process_shader(
+        path.to_string_lossy().as_ref(),
+        None,
+        ProcessContext::Standalone,
+      )
+      .expect("failed to pre-process shader");
       if pre_process_info.no_standalone {
         println!("No standalone - ignoring");
         continue;
@@ -67,46 +78,76 @@ fn main() {
   }
 }
 
-fn pre_process_shader<'a, P, I>(
-  shader_file: P,
-  included_files: I,
+fn pre_process_shader<'a, I>(
+  shader_file: &str,
+  already_included_files: I,
+  context: ProcessContext,
 ) -> Result<PreProcessingInfo, PreProcessingError>
 where
-  P: AsRef<Path>,
   I: Into<Option<&'a HashSet<String>>>,
 {
-  let shader_source = fs::read_to_string(&shader_file).map_err(|e| PreProcessingError::IO {
+  let shader_source = fs::read_to_string(shader_file).map_err(|e| PreProcessingError::IO {
     error: e,
-    file: shader_file.as_ref().to_path_buf(),
+    file: Path::new(shader_file).to_path_buf(),
   })?;
 
   let mut info = PreProcessingInfo {
-    included_files: included_files.into().cloned().unwrap_or_default(),
+    included_files: already_included_files.into().cloned().unwrap_or_default(),
     ..Default::default()
   };
-  for line in shader_source.lines().map(|line| line.trim_end()) {
-    if line == NO_STANDALONE {
+  for (line_index, line) in shader_source.lines().enumerate() {
+    let line_nr = line_index + 1;
+    if get_statement(line, NO_STANDALONE).is_some() {
       info.no_standalone = true;
+      if context == ProcessContext::Standalone {
+        return Ok(info);
+      }
       continue;
     }
 
-    if line == INCLUDE_ONLY_ONCE {
+    if get_statement(line, INCLUDE_ONLY_ONCE).is_some() {
       info.include_only_once = true;
+      if info.included_files.contains(shader_file) {
+        return Ok(info);
+      }
       continue;
     }
 
-    if let Some(include) = line.strip_prefix(INCLUDE) {
-      let include_file = shader_file.as_ref().parent().unwrap().join(include);
-      let include_file_info = pre_process_shader(include_file, &info.included_files)?;
+    if let Some(include_statement) = get_statement(line, INCLUDE) {
+      let include = &include_statement.arg_str;
+      let include_file = Path::new(shader_file)
+        .parent()
+        .unwrap()
+        .join(include)
+        .to_string_lossy()
+        .to_string();
+      let mut include_file_info =
+        pre_process_shader(&include_file, &info.included_files, ProcessContext::Include)?;
       if include_file_info.include_only_once && info.included_files.contains(include) {
         continue;
       }
       info.source_code += &include_file_info.source_code;
       info.included_files.insert(include.to_string());
+      info
+        .struct_definitions
+        .append(&mut include_file_info.struct_definitions);
+      info
+        .generated_representations
+        .append(&mut include_file_info.generated_representations);
       for included_file in include_file_info.included_files {
         info.included_files.insert(included_file);
       }
       continue;
+    }
+
+    if let Some(gen_repr_statement) = get_statement(line, GEN_REPR) {
+      //TODO generate struct representation
+      continue;
+    }
+
+    //we assume a somewhat formatted shader file
+    if let Some(struct_name) = line.strip_prefix("struct ") {
+      //TODO parse struct definition
     }
 
     info.source_code += &format!("{}\n", line);
@@ -115,10 +156,68 @@ where
   Ok(info)
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
+enum ProcessContext {
+  #[default]
+  Standalone,
+  Include,
+}
+
+#[derive(Debug)]
+struct StructDefinition {
+  name: String,
+  members: Vec<StructMember>,
+}
+
+#[derive(Debug)]
+struct StructMember {
+  annotations: Vec<String>,
+  name: String,
+  r#type: String,
+}
+
+impl FromStr for StructDefinition {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref STRUCT_REGEX: Regex =
+        Regex::new(r"^struct (\S+) \{([\s\S]*?)};?").expect("invalid regex");
+      static ref MEMBER_REGEX: Regex =
+        Regex::new(r"\s*((@\S+\s*)*)(\S+): (\S+),\s*").expect("invalid regex");
+    }
+
+    todo!()
+  }
+}
+
+#[derive(Debug)]
+struct GeneratedRepresentation {
+  name: String,
+  ///number of bytes divided by four
+  size: usize,
+}
+
+fn get_statement(line: &str, statement: &str) -> Option<PreProcessorStatement> {
+  let prefix = format!("{}{}", STMT_PREFIX, statement);
+  line
+    .strip_prefix(&prefix)
+    .map(|arg_str| PreProcessorStatement {
+      arg_str: arg_str.trim().to_string(),
+    })
+}
+
+#[derive(Debug)]
+struct PreProcessorStatement {
+  arg_str: String,
+}
+
 #[derive(Debug, Default)]
 struct PreProcessingInfo {
   pub included_files: HashSet<String>,
   pub source_code: String,
+  pub struct_definitions: Vec<StructDefinition>,
+  pub generated_representations: Vec<GeneratedRepresentation>,
   pub no_standalone: bool,
   pub include_only_once: bool,
 }

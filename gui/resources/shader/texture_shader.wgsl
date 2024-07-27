@@ -1,4 +1,4 @@
-//include util/coordinates.wgsl
+#include util/coordinates.wgsl
 
 struct Vertex {
   @location(0) position: vec3<f32>,

@@ -5,16 +5,16 @@
 //Circle: Square, Size, CircleCenter, TexCoords, degrees: f32..f32, Color
 //Ring: Square, TexCoords, TexCoords..TexCoords, degrees: f32..f32, Color
 
-// Pixel:2xu32 - vec2<u32>
-// Size:2xu32 - vec2<u32>
-// PTexCoords:2xf32 - vec2<f32>
-// PClip:4xf32 - vec4<f32>
-// Rect:2xPixel - vec4<u32>
-// CircleCenter:PTexCoords|Pixel - vec4<f32>: ptex|pixel
-// TexCoords:PTexCoords|Size+Pixel - vec4<f32>: size?|?pixel:ptex
-// TexRect:2xTexCoords|Size+Rect - mat3x4<f32>: size?|-,?(rect,-):(tex,tex)
-// Clip:PClip|TexCoords - mat2x4<f32>: ?|-,?tex:pclip
-// Square:3xClip|TexRect - mat4x4<f32>: ?|-,?texrect:(clip,clip,clip)
+// Pixel:2xu32
+// Size:2xu32
+// PTexCoords:2xf32
+// PClip:4xf32
+// Rect:2xPixel
+// CircleCenter:PTexCoords|Pixel
+// TexCoords:PTexCoords|Size+Pixel
+// TexRect:2xTexCoords|Size+Rect
+// Clip:PClip|TexCoords
+// Square:3xClip|TexRect
 
 //CPU conversions:
 // Square / TexCoords... => Clip...
@@ -397,6 +397,17 @@ impl Display for Square {
   }
 }
 
+pub trait FloatArrayRepr {
+  const N: usize;
+
+  fn to_float_array(self) -> [f32; Self::N];
+
+  fn concat<const A: usize, const B: usize, T>(a: [T; A], b: [T; B]) -> [T; A + B] {
+    a.into_iter().chain(b.into_iter()).try_into().unwrap()
+  }
+}
+
+#[deprecated]
 pub trait WGSLRepr {
   type Repr;
 
