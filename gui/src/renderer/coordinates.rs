@@ -25,7 +25,15 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Div, Mul, Sub};
 
-use glam::{Vec3, Vec4};
+use p_clip::PClip;
+use p_tex_coords::PTexCoords;
+use pixel::Pixel;
+use size::Size;
+
+mod p_clip;
+mod p_tex_coords;
+mod pixel;
+mod size;
 
 impl Div<TexCoords> for Square {
   type Output = Clip;
@@ -97,152 +105,6 @@ impl Div<Rect> for Size {
 }
 
 //coordinates
-
-///Denotes a pixel on a canvas or texture
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
-pub struct Pixel {
-  pub x: u32,
-  pub y: u32,
-}
-
-impl Pixel {
-  pub fn new(x: u32, y: u32) -> Self {
-    Self { x, y }
-  }
-}
-
-impl Display for Pixel {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "[{} {}]", self.x, self.y)
-  }
-}
-
-///Describes the size of a canvas, texture or square area
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct Size {
-  pub width: u32,
-  pub height: u32,
-}
-
-impl Size {
-  pub fn new(width: u32, height: u32) -> Self {
-    Self { width, height }
-  }
-}
-
-impl Display for Size {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}x{}", self.width, self.height)
-  }
-}
-
-///Describes a point on a texture, canvas or square area relative to its size, where a value of 0.0
-/// means top/left corner and 1.0 means bottom/right
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
-pub struct PTexCoords {
-  pub x: f32,
-  pub y: f32,
-}
-
-impl PTexCoords {
-  pub fn new(x: f32, y: f32) -> Self {
-    Self { x, y }
-  }
-}
-
-impl Display for PTexCoords {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "[{}% {}%]", self.x * 100.0, self.y * 100.0)
-  }
-}
-
-/// A point in clip coordinate space.
-#[derive(Debug, Copy, Clone, PartialEq, Default)]
-pub struct PClip {
-  pub x: f32,
-  pub y: f32,
-  pub z: f32,
-  pub w: f32,
-}
-
-impl From<Vec4> for PClip {
-  fn from(value: Vec4) -> Self {
-    Self {
-      x: value.x,
-      y: value.y,
-      z: value.z,
-      w: value.w,
-    }
-  }
-}
-
-impl From<Vec3> for PClip {
-  fn from(value: Vec3) -> Self {
-    Self::new(value.x, value.y, value.z)
-  }
-}
-
-impl PClip {
-  pub fn new(x: f32, y: f32, z: f32) -> Self {
-    Self { x, y, z, w: 1.0 }
-  }
-
-  pub fn xyz(&self) -> Vec3 {
-    Vec3::new(self.x, self.y, self.z)
-  }
-}
-
-impl From<PClip> for Vec4 {
-  fn from(value: PClip) -> Self {
-    Self::new(value.x, value.y, value.z, value.w)
-  }
-}
-
-impl Add for PClip {
-  type Output = Self;
-
-  fn add(self, rhs: Self) -> Self::Output {
-    (self.xyz() * rhs.w + rhs.xyz() * self.w).extend(self.w * rhs.w).into()
-  }
-}
-
-impl Sub for PClip {
-  type Output = Self;
-
-  fn sub(self, rhs: Self) -> Self::Output {
-    self + -1.0 * rhs
-  }
-}
-
-impl Mul<f32> for PClip {
-  type Output = Self;
-
-  fn mul(self, rhs: f32) -> Self::Output {
-    (self.xyz() * rhs).extend(self.w).into()
-  }
-}
-
-impl Mul<PClip> for f32 {
-  type Output = PClip;
-
-  fn mul(self, rhs: PClip) -> Self::Output {
-    rhs * self
-  }
-}
-
-impl Div<f32> for PClip {
-  type Output = Self;
-
-  fn div(self, rhs: f32) -> Self::Output {
-    self * (1.0 / rhs)
-  }
-}
-
-impl Display for PClip {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, self.w)
-  }
-}
 
 ///A rectangle described by two [`Pixel`]s which denote the top left corner and the bottom right one
 /// of the rectangle
@@ -355,7 +217,7 @@ impl TexCoords {
   pub fn as_p_tex_coords(&self) -> PTexCoords {
     match *self {
       TexCoords::Relative(coords) => coords,
-      TexCoords::Absolute { size, pixel } => (size / pixel).as_p_tex_coords()
+      TexCoords::Absolute { size, pixel } => (size / pixel).as_p_tex_coords(),
     }
   }
 }
@@ -507,7 +369,7 @@ impl Clip {
   pub fn as_p_clip(&self) -> PClip {
     match *self {
       Clip::Raw(inner) => inner,
-      Clip::Screen(tex_coords) => (Square::default() / tex_coords).as_p_clip()
+      Clip::Screen(tex_coords) => (Square::default() / tex_coords).as_p_clip(),
     }
   }
 }
@@ -608,4 +470,10 @@ impl Display for Square {
       Square::Screen(tex_rect) => write!(f, "screen / {}", tex_rect),
     }
   }
+}
+
+pub trait WGSLRepr {
+  type Repr;
+
+  fn convert(&self) -> Self::Repr;
 }
