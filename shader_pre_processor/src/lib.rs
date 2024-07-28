@@ -3,11 +3,12 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use enum_assoc::Assoc;
 
 use struct_definition::StructDefinition;
+
+use crate::memory_layout::{create_memory_layout, StructDefinitionCache, TypeResolver};
 
 mod memory_layout;
 mod struct_definition;
@@ -50,13 +51,15 @@ pub struct StatementInfo {
 
 ///Pre-processes a shader file. Will return None when pre-processing is cancelled early because file
 /// has already been included or should not be processed as standalone.
-pub fn pre_process_shader<'a, P, C>(
+pub fn pre_process_shader<P, C>(
   shader_file: P,
   context: C,
-) -> Result<Option<PreProcessedShaderInfo>, PreProcessingError>
+  pre_processing_cache: &mut PreProcessingCache,
+  primitive_types: &HashSet<String>,
+) -> Result<Option<String>, PreProcessingError>
 where
   P: AsRef<Path>,
-  C: Into<ProcessContext<'a>>,
+  C: Into<ProcessContext>,
 {
   let shader_file = shader_file.as_ref();
   let context = context.into();
@@ -66,14 +69,11 @@ where
     file: shader_file.to_path_buf(),
   })?;
 
-  let mut info = PreProcessedShaderInfo {
-    included_files: Default::default(),
-    ..Default::default()
-  };
+  let mut source_code = String::new();
   for (line_index, line) in shader_source.lines().enumerate() {
     let line_nr = line_index + 1;
+
     if Statement::NoStandalone.match_info(line).is_some() {
-      info.no_standalone = true;
       if let ProcessContext::Standalone = &context {
         return Ok(None);
       }
@@ -81,30 +81,27 @@ where
     }
 
     if Statement::IncludeOnlyOnce.match_info(line).is_some() {
-      info.include_only_once = true;
-      let shader_file_str = shader_file
-        .to_str()
-        .expect("shader file path not valid utf-8, should not have been able to be included")
-        .to_string();
-      if context
-        .join(&info)
-        .previous_includes
-        .contains(&shader_file_str)
-      {
+      if pre_processing_cache.includes.contains(shader_file) {
         return Ok(None);
-      };
+      }
+
       continue;
     }
 
-    if let Some(stmt_info) = Statement::Include.match_info(line) {
-      let to_include = &stmt_info.arg_str;
-      let include_file = shader_file
+    if let Some(include_info) = Statement::Include.match_info(line) {
+      let to_include = &include_info.arg_str;
+      let include_path = shader_file
         .parent()
         .expect("can't access shader directory")
         .join(to_include);
 
-      if let Some(include_file_info) = pre_process_shader(include_file, context.join(&info))? {
-        info.absorb(include_file_info);
+      if let Some(include_code) = pre_process_shader(
+        include_path,
+        ProcessContext::Include,
+        pre_processing_cache,
+        primitive_types,
+      )? {
+        source_code += &format!("{include_code}\n");
       }
 
       continue;
@@ -118,19 +115,26 @@ where
         line,
         "Missing target name: For which struct shall the repr be generated?",
       ))?;
-      let repr_name = args
+      let _repr_name = args
         .next()
         .map(|s| s.to_string())
         .unwrap_or(format!("{}Repr", target_name));
 
-      let target_definition = context
-        .join(&info)
-        .previous_struct_definitions
-        .iter()
-        .find(|definition| definition.name == target_name)
-        .ok_or(PreProcessingError::statement(shader_file, line_nr, line, format!("Can't find a struct with the name '{}'. Make sure it was defined before this statement!", target_name)))?;
-
-
+      let _memory_layout = create_memory_layout(
+        target_name,
+        &mut TypeResolver {
+          primitive_types,
+          struct_definition_cache: &mut pre_processing_cache.struct_definition_cache,
+        },
+      )
+      .map_err(|e| {
+        PreProcessingError::statement(
+          shader_file,
+          line_nr,
+          line,
+          format!("Failed to create memory layout: {e}"),
+        )
+      })?;
 
       //TODO generate struct representation
       continue;
@@ -143,103 +147,32 @@ where
       .join("\n")
       .parse::<StructDefinition>()
     {
-      info.struct_definitions.push(struct_definition);
+      pre_processing_cache
+        .struct_definition_cache
+        .insert(struct_definition.name.clone(), (struct_definition, None));
     }
 
-    info.source_code += &format!("{}\n", line);
+    source_code += &format!("{line}\n");
   }
 
-  Ok(Some(info))
+  Ok(Some(source_code))
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub struct IncludeContext<'a> {
-  pub previous_includes: HashSet<&'a String>,
-  pub previous_struct_definitions: Vec<&'a StructDefinition>,
-}
-
-impl<'a> IncludeContext<'a> {
-  pub fn join(&'a self, info: &'a PreProcessedShaderInfo) -> IncludeContext<'a> {
-    let mut context = Self::from(info);
-    for &include in &self.previous_includes {
-      context.previous_includes.insert(include);
-    }
-    for &struct_def in &self.previous_struct_definitions {
-      context.previous_struct_definitions.push(struct_def);
-    }
-
-    context
-  }
-}
-
-impl<'a> From<&'a PreProcessedShaderInfo> for IncludeContext<'a> {
-  fn from(value: &'a PreProcessedShaderInfo) -> Self {
-    let mut context = Self::default();
-
-    for include in &value.included_files {
-      context.previous_includes.insert(include);
-    }
-    for struct_definition in &value.struct_definitions {
-      context.previous_struct_definitions.push(struct_definition);
-    }
-
-    context
-  }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub enum ProcessContext<'a> {
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
+pub enum ProcessContext {
   #[default]
   Standalone,
-  Include(IncludeContext<'a>),
+  Include,
 }
 
-impl<'a> From<IncludeContext<'a>> for ProcessContext<'a> {
-  fn from(value: IncludeContext<'a>) -> Self {
-    Self::Include(value)
-  }
-}
-
-impl<'a> ProcessContext<'a> {
-  pub fn join(&'a self, info: &'a PreProcessedShaderInfo) -> IncludeContext<'a> {
-    match self {
-      ProcessContext::Standalone => IncludeContext::from(info),
-      ProcessContext::Include(inner) => inner.join(info),
-    }
-  }
-}
-
-#[derive(Debug, Default)]
-pub struct PreProcessedShaderInfo {
-  pub included_files: HashSet<String>,
-  pub source_code: String,
-  pub struct_definitions: Vec<StructDefinition>,
+#[derive(Debug, Clone, Default)]
+pub struct PreProcessingCache {
+  pub includes: HashSet<PathBuf>,
+  pub struct_definition_cache: StructDefinitionCache,
   pub generated_representations: Vec<GeneratedRepresentation>,
-  pub no_standalone: bool,
-  pub include_only_once: bool,
 }
 
-impl PreProcessedShaderInfo {
-  pub fn absorb(&mut self, info: PreProcessedShaderInfo) {
-    let PreProcessedShaderInfo {
-      included_files,
-      source_code,
-      mut struct_definitions,
-      mut generated_representations,
-      ..
-    } = info;
-    for include in included_files {
-      self.included_files.insert(include);
-    }
-    self.source_code += &source_code;
-    self.struct_definitions.append(&mut struct_definitions);
-    self
-      .generated_representations
-      .append(&mut generated_representations);
-  }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct GeneratedRepresentation {
   pub name: String,
 }
@@ -296,4 +229,3 @@ impl Display for PreProcessingError {
 }
 
 impl Error for PreProcessingError {}
-

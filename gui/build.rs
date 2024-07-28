@@ -1,15 +1,18 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use wgsl_to_wgpu::{create_shader_module, MatrixVectorTypes, WriteOptions};
 
-use shader_pre_processor::{pre_process_shader, ProcessContext};
+use shader_pre_processor::{pre_process_shader, PreProcessingCache, ProcessContext};
 
 const INCLUDE_HOOK_POINT: &str = "INCLUDE_HOOK_POINT";
 
 fn main() {
   println!("cargo::rerun-if-changed=resources/shader/**");
+  
+  let primitive_types: HashSet<String> = ["f32", "u32"].iter().map(|s| s.to_string()).collect(); 
 
   let shader_directory = Path::new("resources/shader");
   let mut shader_rs_source = String::new();
@@ -29,13 +32,16 @@ fn main() {
     if let Some(shader_name) = file_name.strip_suffix(".wgsl").map(|s| s.to_string()) {
       println!("Processing shader {}...", shader_name);
 
-      if let Some(pre_process_info) = pre_process_shader(
+      if let Some(source_code) = pre_process_shader(
         &path,
         ProcessContext::Standalone,
+        &mut PreProcessingCache::default(),
+        &primitive_types,
       )
-      .expect("failed to pre-process shader") {
+      .expect("failed to pre-process shader")
+      {
         let shader_module_source = create_shader_module(
-          &pre_process_info.source_code,
+          &source_code,
           INCLUDE_HOOK_POINT,
           WriteOptions {
             derive_bytemuck_vertex: true,
@@ -44,14 +50,14 @@ fn main() {
             ..Default::default()
           },
         )
-          .expect("can't convert shader to rust");
+        .expect("can't convert shader to rust");
         let shader_module_source = shader_module_source.replace(
-          &format!("include_str!(\"{}\")", INCLUDE_HOOK_POINT),
-          &format!("r#\"\n{}\"#", pre_process_info.source_code),
+          &format!("include_str!(\"{INCLUDE_HOOK_POINT}\")"),
+          &format!("r#\"\n{source_code}\"#"),
         );
 
-        shader_rs_source += &format!("pub mod {} {{\n{}\n}}\n", shader_name, shader_module_source);
-        
+        shader_rs_source += &format!("pub mod {shader_name} {{\n{shader_module_source}\n}}\n");
+
         println!("Ok!");
       } else {
         println!("No standalone - ignoring");
@@ -66,4 +72,3 @@ fn main() {
     let _ = process.wait();
   }
 }
-

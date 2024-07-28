@@ -23,7 +23,7 @@
 // Size / Rect => TexRect
 
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Div};
 
 use p_clip::PClip;
 use p_tex_coords::PTexCoords;
@@ -391,6 +391,7 @@ impl Display for Square {
   }
 }
 
+#[deprecated]
 pub trait FloatArrayRepr {
   fn to_float_array(self) -> Vec<f32>;
 }
