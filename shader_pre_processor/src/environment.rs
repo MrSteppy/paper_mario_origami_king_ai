@@ -22,7 +22,7 @@ impl PreProcessingCache {
 
   pub fn cache<S>(&mut self, layout: S) where S: Into<StructLayout> {
     let layout = layout.into();
-    todo!("add get_name() methods to layout and primitive composition")
+    self.struct_layouts.insert(layout.name().to_string(), layout);
   }
 }
 
@@ -46,6 +46,15 @@ impl From<PrimitiveComposition> for StructLayout {
     Self::Detailed {
       composition: value,
       generated_representation: None,
+    }
+  }
+}
+
+impl StructLayout {
+  pub fn name(&self) -> &str {
+    match self {
+      StructLayout::Simple(definition) => &definition.name,
+      StructLayout::Detailed { composition, .. } => composition.name(),
     }
   }
 }
@@ -404,6 +413,13 @@ impl PrimitiveComposition {
     MemoryLayout {
       primitive_members,
       number_of_padding_bytes,
+    }
+  }
+  
+  pub fn name(&self) -> &str {
+    match self {
+      PrimitiveComposition::Primitive(primitive) => &primitive.name,
+      PrimitiveComposition::Composite(composite) => &composite.name
     }
   }
 }

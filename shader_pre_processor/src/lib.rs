@@ -133,9 +133,7 @@ where
       .join("\n")
       .parse::<StructDefinition>()
     {
-      pre_processing_cache
-        .struct_definition_cache
-        .insert(struct_definition.name.clone(), (struct_definition, None));
+      pre_processing_cache.cache(struct_definition)
     }
 
     source_code += &format!("{line}\n");
