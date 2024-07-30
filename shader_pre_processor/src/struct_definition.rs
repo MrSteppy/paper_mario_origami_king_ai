@@ -56,7 +56,7 @@ pub struct StructMember {
 
 #[cfg(test)]
 mod test {
-  use crate::{pre_process_shader, ProcessContext};
+  use crate::{pre_process_shader, PreProcessingCache, ProcessContext};
   use crate::struct_definition::StructDefinition;
 
   #[test]
@@ -77,6 +77,8 @@ mod test {
     pre_process_shader(
       env!("CARGO_MANIFEST_DIR").to_string() + "/../gui/resources/shader/texture_shader.wgsl",
       ProcessContext::Standalone,
+      &mut PreProcessingCache::default(),
+      &["f32", "u32"].map(|s| s.to_string()).into_iter().collect()
     )
     .expect("failed to pre-process valid shader code");
   }

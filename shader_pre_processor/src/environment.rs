@@ -27,7 +27,7 @@ impl PrimitiveType {
     }
   }
 
-  pub fn new_with_alignment<S>(
+  pub fn new_aligned<S>(
     name: S,
     size: usize,
     alignment: usize,
@@ -51,7 +51,7 @@ impl PrimitiveType {
 
   #[inline]
   pub const fn size(&self) -> usize {
-    (2 << self.alignment_power) * self.size_in_alignments
+    (1 << self.alignment_power) * self.size_in_alignments
   }
 }
 
@@ -96,8 +96,23 @@ pub struct CompositeType {
 }
 
 impl CompositeType {
-  //TODO constructor and add method
-  
+  pub fn new<S>(name: S) -> Self
+  where
+    S: ToString,
+  {
+    Self {
+      name: name.to_string(),
+      members: vec![],
+    }
+  }
+
+  pub fn add<M>(&mut self, member: M)
+  where
+    M: Into<Member>,
+  {
+    self.members.push(member.into());
+  }
+
   pub fn primitive_iter(&self) -> impl Iterator<Item = &PrimitiveType> {
     self
       .members
@@ -110,9 +125,36 @@ impl CompositeType {
 pub struct Member {
   pub name: String,
   pub r#type: PrimitiveComposition,
+  ///The values of all annotations present, without the leading `@`
+  pub annotation_values: Vec<String>,
 }
 
-//TODO Member: constructor, annotations?
+impl Member {
+  pub fn new<S, T>(name: S, r#type: T) -> Self
+  where
+    S: ToString,
+    T: Into<PrimitiveComposition>,
+  {
+    Self {
+      name: name.to_string(),
+      r#type: r#type.into(),
+      annotation_values: vec![],
+    }
+  }
+
+  pub fn new_annotated<A, S, T>(annotations: &[A], name: S, r#type: T) -> Self
+  where
+    A: ToString,
+    S: ToString,
+    T: Into<PrimitiveComposition>,
+  {
+    Self {
+      name: name.to_string(),
+      r#type: r#type.into(),
+      annotation_values: annotations.iter().map(|v| v.to_string()).collect(),
+    }
+  }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum PrimitiveComposition {
@@ -129,8 +171,8 @@ impl PrimitiveComposition {
       PrimitiveComposition::Composite(composite) => Box::new(composite.primitive_iter()),
     }
   }
-  
-  //TODO create memory layout 
+
+  //TODO create memory layout
 }
 
 impl From<PrimitiveType> for PrimitiveComposition {
@@ -145,4 +187,20 @@ impl From<CompositeType> for PrimitiveComposition {
   }
 }
 
-//TODO unit tests for PrimitiveType and CompositeType
+#[cfg(test)]
+mod test_primitive_type {
+  use crate::environment::PrimitiveType;
+
+  #[test]
+  fn test_size() {
+    assert_eq!(4, PrimitiveType::new("f32", 4).size());
+    assert_eq!(16, PrimitiveType::new_aligned("vec4<f32>", 16, 16).unwrap().size());
+    assert_eq!(16, PrimitiveType {
+      name: "vec2<f64>".to_string(),
+      size_in_alignments: 2,
+      alignment_power: 3,
+    }.size());
+  }
+}
+
+//TODO unit tests for CompositeType
