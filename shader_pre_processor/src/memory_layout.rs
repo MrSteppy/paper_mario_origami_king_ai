@@ -206,12 +206,12 @@ mod test {
           name: "Pixel".to_string(),
           members: vec![
             StructMember {
-              annotations: vec![],
+              annotation_values: vec![],
               name: "x".to_string(),
               r#type: "f32".to_string(),
             },
             StructMember {
-              annotations: vec![],
+              annotation_values: vec![],
               name: "y".to_string(),
               r#type: "f32".to_string(),
             },

@@ -1,22 +1,91 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::iter::once;
+use std::path::PathBuf;
+
+use crate::struct_definition::StructDefinition;
+use crate::write_member;
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+pub struct PreProcessingCache {
+  pub includes: HashSet<PathBuf>,
+  struct_layouts: HashMap<String, StructLayout>,
+}
+
+impl PreProcessingCache {
+  pub fn structs(&self) -> &HashMap<String, StructLayout> {
+    &self.struct_layouts
+  }
+
+  pub fn cache<S>(&mut self, layout: S) where S: Into<StructLayout> {
+    let layout = layout.into();
+    todo!("add get_name() methods to layout and primitive composition")
+  }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum StructLayout {
+  Simple(StructDefinition),
+  Detailed {
+    composition: PrimitiveComposition,
+    generated_representation: Option<ReprInfo>,
+  },
+}
+
+impl From<StructDefinition> for StructLayout {
+  fn from(value: StructDefinition) -> Self {
+    Self::Simple(value)
+  }
+}
+
+impl From<PrimitiveComposition> for StructLayout {
+  fn from(value: PrimitiveComposition) -> Self {
+    Self::Detailed {
+      composition: value,
+      generated_representation: None,
+    }
+  }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct ReprInfo {
+  pub name: String,
+}
+
+impl ReprInfo {
+  pub fn new<S>(name: S) -> Self
+  where
+    S: ToString,
+  {
+    Self {
+      name: name.to_string(),
+    }
+  }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct PreProcessingEnvironment {
   primitive_and_native_types: HashMap<String, PrimitiveComposition>,
 }
 
+///A native type is a type which is native in wgsl but can not be translated by wgsl_to_wgpu, like mat4x4<f32>.
+/// Every type added which is not a [`PrimitiveType`] will be considered native.  
 impl PreProcessingEnvironment {
   pub fn new() -> Self {
     Self::default()
   }
 
-  ///A native type is a type which is native in wgsl but can not be translated by wgsl_to_wgpu, like mat4x4<f32>.
-  /// Every type added which is not a [`PrimitiveType`] will be considered native.  
+  pub fn with<T>(mut self, r#type: T) -> Self
+  where
+    T: Into<PrimitiveComposition>,
+  {
+    self.add(r#type);
+    self
+  }
+
   pub fn add<T>(&mut self, r#type: T)
   where
     T: Into<PrimitiveComposition>,
@@ -31,7 +100,7 @@ impl PreProcessingEnvironment {
       r#type,
     );
   }
-  
+
   pub fn types(&self) -> &HashMap<String, PrimitiveComposition> {
     &self.primitive_and_native_types
   }
@@ -239,18 +308,7 @@ impl Member {
 
 impl Display for Member {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(
-      f,
-      "{}{}: {}",
-      self
-        .annotation_values
-        .iter()
-        .map(|value| format!("@{value} "))
-        .collect::<Vec<_>>()
-        .join(""),
-      self.name,
-      self.r#type
-    )
+    write_member(f, &self.annotation_values, &self.name, &self.r#type)
   }
 }
 

@@ -1,5 +1,4 @@
 use std::{fs, io};
-use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
@@ -8,11 +7,11 @@ use enum_assoc::Assoc;
 
 use struct_definition::StructDefinition;
 
-use crate::memory_layout::{create_memory_layout, StructDefinitionCache, TypeResolver};
+use crate::environment::{PreProcessingCache, PreProcessingEnvironment};
 
+pub mod environment;
 mod memory_layout;
 mod struct_definition;
-pub mod environment;
 
 ///The prefix of every pre-processor statement
 pub const STMT_PREFIX: &str = "#";
@@ -47,7 +46,7 @@ impl Statement {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct StatementInfo {
-  arg_str: String,
+  pub arg_str: String,
 }
 
 ///Pre-processes a shader file. Will return None when pre-processing is cancelled early because file
@@ -56,7 +55,7 @@ pub fn pre_process_shader<P, C>(
   shader_file: P,
   context: C,
   pre_processing_cache: &mut PreProcessingCache,
-  primitive_types: &HashSet<String>,
+  environment: &PreProcessingEnvironment,
 ) -> Result<Option<String>, PreProcessingError>
 where
   P: AsRef<Path>,
@@ -100,7 +99,7 @@ where
         include_path,
         ProcessContext::Include,
         pre_processing_cache,
-        primitive_types,
+        environment,
       )? {
         source_code += &format!("{include_code}\n");
       }
@@ -121,21 +120,7 @@ where
         .map(|s| s.to_string())
         .unwrap_or(format!("{}Repr", target_name));
 
-      let _memory_layout = create_memory_layout(
-        target_name,
-        &mut TypeResolver {
-          primitive_types,
-          struct_definition_cache: &mut pre_processing_cache.struct_definition_cache,
-        },
-      )
-      .map_err(|e| {
-        PreProcessingError::statement(
-          shader_file,
-          line_nr,
-          line,
-          format!("Failed to create memory layout: {e}"),
-        )
-      })?;
+      //TODO create memory layout
 
       //TODO generate struct representation
       continue;
@@ -164,18 +149,6 @@ pub enum ProcessContext {
   #[default]
   Standalone,
   Include,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PreProcessingCache {
-  pub includes: HashSet<PathBuf>,
-  pub struct_definition_cache: StructDefinitionCache,
-  pub generated_representations: Vec<GeneratedRepresentation>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct GeneratedRepresentation {
-  pub name: String,
 }
 
 #[allow(dead_code)]
@@ -230,3 +203,42 @@ impl Display for PreProcessingError {
 }
 
 impl Error for PreProcessingError {}
+
+fn write_member<T>(
+  f: &mut Formatter,
+  annotation_values: &[String],
+  name: &str,
+  r#type: &T,
+) -> std::fmt::Result
+where
+  T: Display,
+{
+  write!(
+    f,
+    "{}{}: {}",
+    annotation_values
+      .iter()
+      .map(|value| format!("@{value} "))
+      .collect::<Vec<_>>()
+      .join(""),
+    name,
+    r#type
+  )
+}
+
+#[cfg(test)]
+mod test {
+  use crate::{pre_process_shader, PreProcessingCache, ProcessContext};
+  use crate::environment::PreProcessingEnvironment;
+
+  #[test]
+  fn test_pre_processing() {
+    pre_process_shader(
+      env!("CARGO_MANIFEST_DIR").to_string() + "/../gui/resources/shader/texture_shader.wgsl",
+      ProcessContext::Standalone,
+      &mut PreProcessingCache::default(),
+      &PreProcessingEnvironment::new(),
+    )
+    .expect("failed to pre-process valid shader code");
+  }
+}

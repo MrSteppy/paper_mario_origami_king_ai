@@ -1,6 +1,9 @@
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use once_cell_regex::regex;
+
+use crate::write_member;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct StructDefinition {
@@ -34,7 +37,7 @@ impl FromStr for StructDefinition {
         .collect();
       let member_type = captures.name("type").unwrap().as_str().to_string();
       members.push(StructMember {
-        annotations,
+        annotation_values: annotations,
         name: member_name,
         r#type: member_type,
       });
@@ -49,14 +52,19 @@ impl FromStr for StructDefinition {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct StructMember {
-  pub annotations: Vec<String>,
+  pub annotation_values: Vec<String>,
   pub name: String,
   pub r#type: String,
 }
 
+impl Display for StructMember {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write_member(f, &self.annotation_values, &self.name, &self.r#type)
+  }
+}
+
 #[cfg(test)]
 mod test {
-  use crate::{pre_process_shader, PreProcessingCache, ProcessContext};
   use crate::struct_definition::StructDefinition;
 
   #[test]
@@ -70,16 +78,5 @@ mod test {
     assert_eq!("Pixel", definition.name);
     assert_eq!("x", definition.members[0].name);
     assert_eq!("u32", definition.members[0].r#type);
-  }
-
-  #[test]
-  fn test_pre_processing() {
-    pre_process_shader(
-      env!("CARGO_MANIFEST_DIR").to_string() + "/../gui/resources/shader/texture_shader.wgsl",
-      ProcessContext::Standalone,
-      &mut PreProcessingCache::default(),
-      &["f32", "u32"].map(|s| s.to_string()).into_iter().collect()
-    )
-    .expect("failed to pre-process valid shader code");
   }
 }
