@@ -12,6 +12,7 @@ use crate::memory_layout::{create_memory_layout, StructDefinitionCache, TypeReso
 
 mod memory_layout;
 mod struct_definition;
+pub mod environment;
 
 ///The prefix of every pre-processor statement
 pub const STMT_PREFIX: &str = "#";
