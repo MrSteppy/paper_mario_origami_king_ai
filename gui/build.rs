@@ -1,18 +1,22 @@
-use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use wgsl_to_wgpu::{create_shader_module, MatrixVectorTypes, WriteOptions};
 
-use shader_pre_processor::{pre_process_shader, PreProcessingCache, ProcessContext};
+use shader_pre_processor::{pre_process_shader, ProcessContext};
+use shader_pre_processor::environment::{
+  PreProcessingCache, PreProcessingEnvironment, PrimitiveType,
+};
 
 const INCLUDE_HOOK_POINT: &str = "INCLUDE_HOOK_POINT";
 
 fn main() {
   println!("cargo::rerun-if-changed=resources/shader/**");
-  
-  let primitive_types: HashSet<String> = ["f32", "u32"].iter().map(|s| s.to_string()).collect(); 
+
+  let environment = PreProcessingEnvironment::new()
+    .with(PrimitiveType::new("f32", 4, "f32"))
+    .with(PrimitiveType::new("u32", 4, "u32"));
 
   let shader_directory = Path::new("resources/shader");
   let mut shader_rs_source = String::new();
@@ -36,7 +40,7 @@ fn main() {
         &path,
         ProcessContext::Standalone,
         &mut PreProcessingCache::default(),
-        &primitive_types,
+        &environment,
       )
       .expect("failed to pre-process shader")
       {
