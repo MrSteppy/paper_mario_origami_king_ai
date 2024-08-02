@@ -313,7 +313,7 @@ where
   let mut best_solution: Option<Vec<Move>> = None;
   for dimension in [Row, Column] {
     for coordinate in 0..dimension.size() {
-      for amount in 1..dimension.changes().size() {
+      for amount in 1..=dimension.changes().size() {
         let move_ = Move::new(dimension, coordinate, amount, true).unwrap();
         let mut arena_clone = arena.clone();
         arena_clone.apply_move(move_);
@@ -493,5 +493,15 @@ mod test_solve {
       .map(|m| m.to_string())
       .collect::<Vec<_>>()
       .join(", ")
+  }
+
+  #[test]
+  fn test_example_1() {
+    let mut arena = SolvableArena::default();
+    for cmd in ["c2 23", "c6 1234", "c8 14"] {
+      parse(&mut arena, cmd).unwrap();
+    }
+
+    solve(&arena, 3, true, None).expect("is solvable in 3");
   }
 }
