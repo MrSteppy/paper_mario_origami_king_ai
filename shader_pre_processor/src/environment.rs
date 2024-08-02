@@ -12,17 +12,98 @@ use crate::write_member;
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct PreProcessingCache {
   pub includes: HashSet<PathBuf>,
-  struct_layouts: HashMap<String, StructLayout>,
+  struct_layouts: HashMap<String, Declaration<StructLayout>>,
 }
 
 impl PreProcessingCache {
-  pub fn structs(&self) -> &HashMap<String, StructLayout> {
+  pub fn structs(&self) -> &HashMap<String, Declaration<StructLayout>> {
     &self.struct_layouts
   }
 
-  pub fn cache<S>(&mut self, layout: S) where S: Into<StructLayout> {
+  #[deprecated]
+  pub fn cache<S>(&mut self, layout: S)
+  where
+    S: Into<StructLayout>,
+  {
     let layout = layout.into();
-    self.struct_layouts.insert(layout.name().to_string(), layout);
+    self
+      .struct_layouts
+      .insert(layout.name().to_string(), Declaration::new(0, layout));
+  }
+
+  pub fn insert<S>(&mut self, declaration: Declaration<S>)
+  where
+    S: Into<StructLayout>,
+  {
+    let declaration = declaration.map(|s| s.into());
+    self
+      .struct_layouts
+      .insert(declaration.declared.name().to_string(), declaration);
+  }
+
+  pub fn update<S>(
+    &mut self,
+    layout: S,
+  ) -> Result<&mut Declaration<StructLayout>, MissingDeclarationError>
+  where
+    S: Into<StructLayout>,
+  {
+    let layout = layout.into();
+    let declaration = self
+      .struct_layouts
+      .get_mut(layout.name())
+      .ok_or(MissingDeclarationError)?;
+    declaration.declared = layout;
+    Ok(declaration)
+  }
+}
+
+#[derive(Debug)]
+pub struct MissingDeclarationError;
+
+impl Display for MissingDeclarationError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "LayoutDeclaration has not been inserted yet")
+  }
+}
+
+impl Error for MissingDeclarationError {}
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct Declaration<T> {
+  pub line_nr: usize,
+  pub declared: T,
+}
+
+impl<T> Declaration<T> {
+  pub fn new<D>(line_nr: usize, declared: D) -> Self
+  where
+    D: Into<T>,
+  {
+    Self {
+      line_nr,
+      declared: declared.into(),
+    }
+  }
+
+  pub fn map<F, R>(self, mapping: F) -> Declaration<R>
+  where
+    F: FnOnce(T) -> R,
+  {
+    let Self { line_nr, declared } = self;
+    Declaration {
+      line_nr,
+      declared: mapping(declared),
+    }
+  }
+}
+
+impl<T> Display for Declaration<T>
+where
+  T: Display,
+{
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "line {}: {}", self.line_nr, self.declared)
   }
 }
 
@@ -415,11 +496,11 @@ impl PrimitiveComposition {
       number_of_padding_bytes,
     }
   }
-  
+
   pub fn name(&self) -> &str {
     match self {
       PrimitiveComposition::Primitive(primitive) => &primitive.name,
-      PrimitiveComposition::Composite(composite) => &composite.name
+      PrimitiveComposition::Composite(composite) => &composite.name,
     }
   }
 }

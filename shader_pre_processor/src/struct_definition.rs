@@ -1,8 +1,11 @@
+use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
+use once_cell_regex::exports::regex::{Captures, Regex};
 use once_cell_regex::regex;
 
+use crate::environment::Declaration;
 use crate::write_member;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -11,31 +14,79 @@ pub struct StructDefinition {
   pub members: Vec<StructMember>,
 }
 
-impl FromStr for StructDefinition {
-  type Err = String;
+impl StructDefinition {
+  fn struct_regex() -> &'static Regex {
+    regex!(r"struct (?<name>\S+)\s*\{(?<content>[\s\S]*?)};?")
+  }
 
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let struct_regex = regex!(r"^struct (?<name>\S+)\s*\{(?<content>[\s\S]*?)};?");
-    let member_regex = regex!(r"\s*(?<annotations>(@\S+\s*)*)(?<name>\S+): (?<type>\S+),\s*");
+  fn member_regex() -> &'static Regex {
+    regex!(r"\s*(?<annotations>(@\S+\s*)*)(?<name>\S+): (?<type>\S+),\s*")
+  }
 
-    let captures = struct_regex
-      .captures(s)
-      .filter(|caps| caps.get(0).unwrap().start() == 0)
-      .ok_or("provided string doesn't start with a valid struct definition")?;
-    let struct_name = captures.name("name").unwrap().as_str().to_string();
-    let struct_content = captures.name("content").unwrap().as_str();
+  pub fn from_source<S>(
+    shader_source: S,
+  ) -> Vec<Declaration<Result<StructDefinition, StructDefinitionError>>>
+  where
+    S: ToString,
+  {
+    let shader_source = shader_source.to_string();
+
+    let mut struct_definitions = vec![];
+    for struct_captures in Self::struct_regex().captures_iter(&shader_source) {
+      //substring via byte index since Match::start is in bytes
+      let struct_match = struct_captures.get(0).expect("i == 0 => Some");
+      let line_nr = shader_source[..struct_match.start()]
+        .chars()
+        .filter(|&c| c == '\n')
+        .count()
+        + 1;
+
+      struct_definitions.push(Declaration::new(
+        line_nr,
+        Self::from_captures(struct_captures),
+      ));
+    }
+    struct_definitions
+  }
+
+  fn from_captures(captures: Captures) -> Result<StructDefinition, StructDefinitionError> {
+    let name = captures
+      .name("name")
+      .expect("missing capture group")
+      .as_str()
+      .to_string();
+    let struct_content = captures
+      .name("content")
+      .expect("missing capture group")
+      .as_str();
 
     let mut members = vec![];
-    for captures in member_regex.captures_iter(struct_content) {
-      let member_name = captures.name("name").unwrap().as_str().to_string();
+    for captures in Self::member_regex().captures_iter(struct_content) {
+      let member_name = captures
+        .name("name")
+        .expect("missing capture group")
+        .as_str()
+        .to_string();
       let annotations: Vec<String> = captures
         .name("annotations")
-        .unwrap()
+        .expect("missing capture group")
         .as_str()
         .split_whitespace()
-        .map(|annotation| annotation.to_string())
-        .collect();
-      let member_type = captures.name("type").unwrap().as_str().to_string();
+        .map(|annotation| {
+          annotation
+            .strip_prefix('@')
+            .map(|annotation_value| annotation_value.to_string())
+            .ok_or(StructDefinitionError::MissingAnnotationPrefix {
+              member_name: member_name.clone(),
+              annotation: annotation.to_string(),
+            })
+        })
+        .collect::<Result<Vec<_>, StructDefinitionError>>()?;
+      let member_type = captures
+        .name("type")
+        .expect("missing capture group")
+        .as_str()
+        .to_string();
       members.push(StructMember {
         annotation_values: annotations,
         name: member_name,
@@ -43,12 +94,34 @@ impl FromStr for StructDefinition {
       });
     }
 
-    Ok(StructDefinition {
-      name: struct_name,
-      members,
-    })
+    Ok(StructDefinition { name, members })
   }
 }
+
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum StructDefinitionError {
+  MissingAnnotationPrefix {
+    member_name: String,
+    annotation: String,
+  },
+}
+
+impl Display for StructDefinitionError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      StructDefinitionError::MissingAnnotationPrefix {
+        member_name,
+        annotation,
+      } => write!(
+        f,
+        "annotation on member {member_name} is missing annotation prefix(@): '{annotation}'"
+      ),
+    }
+  }
+}
+
+impl Error for StructDefinitionError {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct StructMember {
@@ -65,18 +138,36 @@ impl Display for StructMember {
 
 #[cfg(test)]
 mod test {
-  use crate::struct_definition::StructDefinition;
+  use crate::environment::Declaration;
+  use crate::struct_definition::{StructDefinition, StructMember};
 
   #[test]
   fn test_parse_struct_definition() {
-    let definition: StructDefinition = r"struct Pixel {
+    let shader_source = r"struct Pixel {
       @location(0) x: u32,
       @location(1) y: u32,
-    }"
-    .parse()
-    .expect("failed to parse struct definition");
-    assert_eq!("Pixel", definition.name);
-    assert_eq!("x", definition.members[0].name);
-    assert_eq!("u32", definition.members[0].r#type);
+    }";
+    let definitions = StructDefinition::from_source(shader_source);
+    assert_eq!(
+      vec![Declaration::new(
+        1,
+        Ok(StructDefinition {
+          name: "Pixel".to_string(),
+          members: vec![
+            StructMember {
+              annotation_values: vec!["location(0)".to_string()],
+              name: "x".to_string(),
+              r#type: "u32".to_string(),
+            },
+            StructMember {
+              annotation_values: vec!["location(1)".to_string()],
+              name: "y".to_string(),
+              r#type: "u32".to_string(),
+            }
+          ],
+        })
+      )],
+      definitions
+    );
   }
 }

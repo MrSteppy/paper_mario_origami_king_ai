@@ -2,10 +2,9 @@ use std::{fs, io};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use enum_assoc::Assoc;
-
-use struct_definition::StructDefinition;
 
 use crate::environment::{PreProcessingCache, PreProcessingEnvironment};
 
@@ -35,7 +34,7 @@ pub enum Statement {
 }
 
 impl Statement {
-  pub fn match_info(&self, line: &str) -> Option<StatementInfo> {
+  pub fn match_line(&self, line: &str) -> Option<StatementInfo> {
     line
       .strip_prefix(&format!("{}{}", STMT_PREFIX, self.as_str()))
       .map(|arg_str| StatementInfo {
@@ -73,14 +72,14 @@ where
   for (line_index, line) in shader_source.lines().enumerate() {
     let line_nr = line_index + 1;
 
-    if Statement::NoStandalone.match_info(line).is_some() {
+    if Statement::NoStandalone.match_line(line).is_some() {
       if let ProcessContext::Standalone = &context {
         return Ok(None);
       }
       continue;
     }
 
-    if Statement::IncludeOnlyOnce.match_info(line).is_some() {
+    if Statement::IncludeOnlyOnce.match_line(line).is_some() {
       if pre_processing_cache.includes.contains(shader_file) {
         return Ok(None);
       }
@@ -88,7 +87,7 @@ where
       continue;
     }
 
-    if let Some(include_info) = Statement::Include.match_info(line) {
+    if let Some(include_info) = Statement::Include.match_line(line) {
       let to_include = &include_info.arg_str;
       let include_path = shader_file
         .parent()
@@ -107,33 +106,15 @@ where
       continue;
     }
 
-    if let Some(stmt_info) = Statement::GenRepr.match_info(line) {
-      let mut args = stmt_info.arg_str.split_whitespace();
-      let target_name = args.next().ok_or(PreProcessingError::statement(
-        shader_file,
-        line_nr,
-        line,
-        "Missing target name: For which struct shall the repr be generated?",
-      ))?;
-      let _repr_name = args
-        .next()
-        .map(|s| s.to_string())
-        .unwrap_or(format!("{}Repr", target_name));
+    if let Some(stmt_info) = Statement::GenRepr.match_line(line) {
+      //TODO make sure next line has definition and prevent type recursion
+
+      //TODO parse repr name
 
       //TODO create memory layout
 
       //TODO generate struct representation
       continue;
-    }
-
-    if let Ok(struct_definition) = shader_source
-      .lines()
-      .skip(line_index)
-      .collect::<Vec<_>>()
-      .join("\n")
-      .parse::<StructDefinition>()
-    {
-      pre_processing_cache.cache(struct_definition)
     }
 
     source_code += &format!("{line}\n");
