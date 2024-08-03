@@ -133,21 +133,35 @@ impl Move {
     })
   }
 
-  pub fn normalized(&self) -> Self {
-    let mut norm = *self;
-    //make sure we use low value columns
-    if norm.dimension == Column && norm.coordinate > Column.size() / 2 {
-      norm.coordinate -= Column.size() / 2;
-      norm.in_positive_direction ^= true; //invert direction
+  pub fn normalized(mut self) -> Self {
+    match self.dimension {
+      Row => {
+        //turn by lowest amount possible
+        self.amount %= Column.size();
+        if self.amount > Column.size() / 2 {
+          self.amount = Column.size() - self.amount;
+          self.in_positive_direction ^= true; //invert
+        }
+      }
+      Column => {
+        //prefer lower coordinates
+        if self.coordinate > Column.size() / 2 {
+          self.coordinate -= Column.size() / 2;
+          self.in_positive_direction ^= true; //invert
+        }
+
+        //prefer absolute smaller amount, then positive amount
+        self.amount %= Row.size() * 2;
+        if self.amount > Row.size() {
+          self.amount = Row.size() * 2 - self.amount;
+          self.in_positive_direction ^= true; //invert
+        }
+        if self.amount == Row.size() {
+          self.in_positive_direction = true;
+        }
+      }
     }
-    let c_size = norm.dimension.changes().size();
-    //make sure amount is as small as possible
-    norm.amount %= c_size;
-    if norm.amount > c_size / 2 {
-      norm.amount = c_size - norm.amount;
-      norm.in_positive_direction ^= true; //invert direction
-    }
-    norm
+    self
   }
 }
 
@@ -427,6 +441,8 @@ mod test_dimension {
 
 #[cfg(test)]
 mod test_move {
+  use std::str::FromStr;
+
   use crate::position::{Dimension, Move};
 
   #[test]
@@ -435,6 +451,18 @@ mod test_move {
       Move::new(Dimension::Column, 2, 1, false).unwrap(),
       "c3 -1".parse().expect("failed to parse")
     );
+  }
+
+  #[test]
+  fn test_normalized() {
+    assert_eq!(Move::from_str("r1 -3").unwrap(), Move::from_str("r1 9").unwrap().normalized());
+    assert_eq!(Move::from_str("c2 2").unwrap(), Move::from_str("c8 -2").unwrap().normalized());
+    assert_eq!(Move::from_str("c3 4").unwrap(), Move::from_str("c9 4").unwrap().normalized());
+  }
+
+  #[test]
+  fn test_display() {
+    assert_eq!("c1 4", Move::from_str("c1 4").unwrap().to_string());
   }
 }
 
