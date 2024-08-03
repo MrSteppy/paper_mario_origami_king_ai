@@ -42,6 +42,7 @@ A command overview can be found typing "?" or "help".
 | c2 124          | Set enemies in column 2 on row 1, 2 and 4                                                            |
 | c3 3 H          | Set the enemy in column 3, row 3 to require to be killed by hammer                                   |
 | c6 1234 J       | Set the enemies in column 6 to be killed by jumping                                                  |
+| c7 3 P          | Set the enemy in column 7, row3 to be killed by hammer or iron-boots (P because it has sPikes)       |
 | - c3 1          | Remove the enemy on column 3, row 1                                                                  |
 | g 4             | Tell the ai that there are 4 groups of enemies. This can usually be omitted.                         |
 | solve in 3      | Find the optimal solution in max 3 turns                                                             |
@@ -50,6 +51,8 @@ A command overview can be found typing "?" or "help".
 | solve fast in 5 | Find a possibly non-optimal solution in max 5 turns                                                  |
 | +hammer         | Tell the ai you have a throwable hammer which can be used                                            |
 | -hammer         | Tell the ai you don't have a throwable hammer to use                                                 |
+| +iron-boots     | Tell the ai you have iron-boots at your disposal                                                     |
+| -iron-boots     | Tell the ai you don't have iron-boots at your disposal                                               |
 | e r2 5          | Manually execute the move `r2 5`                                                                     |
 | clear           | Reset the arena                                                                                      |
 
