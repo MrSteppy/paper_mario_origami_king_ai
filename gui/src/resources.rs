@@ -44,6 +44,7 @@ impl Display for IconError {
 
 impl Error for IconError {}
 
+#[macro_export]
 macro_rules! resource_path {
   ($first:ident $(/$path: ident)*.$ext:ident) => {
     concat!(
@@ -58,33 +59,36 @@ macro_rules! resource_path {
     )
   };
 }
-pub(crate) use resource_path;
 
 ///Includes a file from the `resources` folder as string
 ///
 /// <strong>Example<strong>
 /// ```
-/// include_resource_str!(test/test.txt) //includes resources/test/test.txt
+/// use gui::include_resource_str;
+/// 
+/// let data = include_resource_str!(test/test_data.txt); //includes resources/test/test_data.txt
 /// ```
+#[macro_export]
 macro_rules! include_resource_str {
   ($first:ident $(/$path: ident)*.$ext:ident) => {
-    include_str!(crate::resources::resource_path!($first $(/$path)*.$ext))
+    include_str!($crate::resource_path!($first $(/$path)*.$ext))
   };
 }
-pub(crate) use include_resource_str;
 
 ///Includes a file from the `resources` folder as bytes
 ///
 /// <strong>Example<strong>
 /// ```rust
-/// include_resource_bytes!(test/test.txt) //includes resources/test/test.txt
+/// use gui::include_resource_bytes;
+/// 
+/// let bytes = include_resource_bytes!(test/test_data.txt); //includes resources/test/test_data.txt
 /// ```
+#[macro_export]
 macro_rules! include_resource_bytes {
   ($first:ident $(/$path: ident)*.$ext:ident) => {
-    include_bytes!(crate::resources::resource_path!($first $(/$path)*.$ext))
+    include_bytes!($crate::resource_path!($first $(/$path)*.$ext))
   };
 }
-pub(crate) use include_resource_bytes;
 
 #[cfg(test)]
 mod test_include {

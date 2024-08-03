@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::position::{Move, Num, Position};
 use crate::position::Dimension::Column;
-use crate::solving::{Attack, Enemy, SolvableArena, solve};
+use crate::solving::{Enemy, RequiredAttack, SolvableArena, solve};
 
 pub mod arena;
 pub mod position;
@@ -15,11 +15,12 @@ pub fn parse(arena: &mut SolvableArena, command: &str) -> Result<(), ParseError>
   let cmd = args.next().unwrap();
   match cmd {
     "help" | "h" | "?" => {
-      println!("set enemy positions: c1 124 H/J");
+      println!("set enemy positions: c1 124 H/J/P");
       println!("remove enemies: - c1 3");
       println!("set number of enemy groups: g 4");
       println!("solve: solve in 3");
-      println!("whether you have a throw hammer: +hammer / -hammer");
+      println!("whether you have a throwable hammer: +hammer / -hammer");
+      println!("whether you have iron boots: +iron-boots / -iron-boots");
       println!("manually execute turns: e r2 5");
       println!("clear arena: clear");
     }
@@ -117,25 +118,32 @@ pub fn parse(arena: &mut SolvableArena, command: &str) -> Result<(), ParseError>
       arena.show();
     }
     "+hammer" => {
-      arena.throwing_hammer_available = true;
+      arena.available_equipment.throwing_hammer = true;
     }
     "-hammer" => {
-      arena.throwing_hammer_available = false;
+      arena.available_equipment.throwing_hammer = false;
+    }
+    "+iron-boots" => {
+      arena.available_equipment.iron_boots = true;
+    }
+    "-iron-boots" => {
+      arena.available_equipment.iron_boots = false;
     }
     _ => {
       let rows_arg = args.next().ok_or(ParseError::missing_argument("rows"))?;
-      let weakness = match args.next() {
+      let required_attack = match args.next() {
         Some(arg) => match arg {
-          "H" => Attack::Hammer,
-          "J" => Attack::Jump,
-          _ => return Err(ParseError::illegal_argument(arg, "expected H or J")),
+          "H" => RequiredAttack::Hammer,
+          "J" => RequiredAttack::Jump,
+          "P" => RequiredAttack::IronBootsOrHammer,
+          _ => return Err(ParseError::illegal_argument(arg, "expected H, J or P")),
         }
         .into(),
         None => None,
       };
       let positions = parse_positions(cmd, rows_arg)?;
       for position in positions {
-        arena.add(Enemy { position, weakness });
+        arena.add(Enemy { position, required_attack });
       }
       arena.show();
     }

@@ -8,7 +8,7 @@ use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 use crate::app_state::AppState;
-use crate::resources::include_resource_bytes;
+use crate::include_resource_bytes;
 use crate::shader::{shader, texture_shader};
 use crate::shader::shader::VertexInput;
 
