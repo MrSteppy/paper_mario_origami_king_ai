@@ -1,11 +1,10 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::str::FromStr;
 
 use once_cell_regex::exports::regex::{Captures, Regex};
 use once_cell_regex::regex;
 
-use crate::environment::Declaration;
+use crate::environment::{Declaration, DeclarationInfo};
 use crate::write_member;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -27,12 +26,12 @@ impl StructDefinition {
     shader_source: S,
   ) -> Vec<Declaration<Result<StructDefinition, StructDefinitionError>>>
   where
-    S: ToString,
+    S: AsRef<str>,
   {
-    let shader_source = shader_source.to_string();
+    let shader_source = shader_source.as_ref();
 
     let mut struct_definitions = vec![];
-    for struct_captures in Self::struct_regex().captures_iter(&shader_source) {
+    for struct_captures in Self::struct_regex().captures_iter(shader_source) {
       //substring via byte index since Match::start is in bytes
       let struct_match = struct_captures.get(0).expect("i == 0 => Some");
       let line_nr = shader_source[..struct_match.start()]
@@ -42,7 +41,7 @@ impl StructDefinition {
         + 1;
 
       struct_definitions.push(Declaration::new(
-        line_nr,
+        DeclarationInfo::new(line_nr),
         Self::from_captures(struct_captures),
       ));
     }
@@ -138,7 +137,7 @@ impl Display for StructMember {
 
 #[cfg(test)]
 mod test {
-  use crate::environment::Declaration;
+  use crate::environment::{Declaration, DeclarationInfo};
   use crate::struct_definition::{StructDefinition, StructMember};
 
   #[test]
@@ -150,7 +149,7 @@ mod test {
     let definitions = StructDefinition::from_source(shader_source);
     assert_eq!(
       vec![Declaration::new(
-        1,
+        DeclarationInfo::new(1),
         Ok(StructDefinition {
           name: "Pixel".to_string(),
           members: vec![

@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::iter::once;
+use std::ops::Add;
 use std::path::PathBuf;
 
 use crate::struct_definition::StructDefinition;
@@ -19,6 +20,10 @@ impl PreProcessingCache {
   pub fn structs(&self) -> &HashMap<String, Declaration<StructLayout>> {
     &self.struct_layouts
   }
+  
+  pub fn structs_mut(&mut self) -> &mut HashMap<String, Declaration<StructLayout>> {
+    &mut self.struct_layouts
+  }
 
   #[deprecated]
   pub fn cache<S>(&mut self, layout: S)
@@ -28,17 +33,18 @@ impl PreProcessingCache {
     let layout = layout.into();
     self
       .struct_layouts
-      .insert(layout.name().to_string(), Declaration::new(0, layout));
+      .insert(layout.name().to_string(), Declaration::new(DeclarationInfo::new(0), layout));
   }
 
-  pub fn insert<S>(&mut self, declaration: Declaration<S>)
+  ///inserts a [`Declaration`] in the cache and returns the previous [`Declaration`], if present
+  pub fn insert<S>(&mut self, declaration: Declaration<S>) -> Option<Declaration<StructLayout>>
   where
     S: Into<StructLayout>,
   {
-    let declaration = declaration.map(|s| s.into());
+    let declaration = declaration.convert(|info, s| info + s.into());
     self
       .struct_layouts
-      .insert(declaration.declared.name().to_string(), declaration);
+      .insert(declaration.declared.name().to_string(), declaration)
   }
 
   pub fn update<S>(
@@ -69,32 +75,33 @@ impl Display for MissingDeclarationError {
 
 impl Error for MissingDeclarationError {}
 
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Declaration<T> {
-  pub line_nr: usize,
+  pub info: DeclarationInfo,
   pub declared: T,
 }
 
 impl<T> Declaration<T> {
-  pub fn new<D>(line_nr: usize, declared: D) -> Self
+  pub fn new<I, D>(info: I, declared: D) -> Self
   where
+    I: Into<DeclarationInfo>,
     D: Into<T>,
   {
     Self {
-      line_nr,
+      info: info.into(),
       declared: declared.into(),
     }
   }
+  
+  pub fn separate(self) -> (DeclarationInfo, T) {
+    (self.info, self.declared)
+  }
 
-  pub fn map<F, R>(self, mapping: F) -> Declaration<R>
+  pub fn convert<F, R>(self, mapping: F) -> R
   where
-    F: FnOnce(T) -> R,
+    F: FnOnce(DeclarationInfo, T) -> R,
   {
-    let Self { line_nr, declared } = self;
-    Declaration {
-      line_nr,
-      declared: mapping(declared),
-    }
+    mapping(self.info, self.declared)
   }
 }
 
@@ -103,7 +110,40 @@ where
   T: Display,
 {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "line {}: {}", self.line_nr, self.declared)
+    write!(f, "{}: {}", self.info, self.declared)
+  }
+}
+
+//TODO use source position instead of just line_nr
+#[non_exhaustive]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DeclarationInfo {
+  pub line_nr: usize,
+}
+
+impl DeclarationInfo {
+  pub fn new(line_nr: usize) -> Self {
+    Self {
+      line_nr
+    }
+  }
+
+  pub fn with<T>(self, declared: T) -> Declaration<T> {
+    Declaration::new(self.clone(), declared)
+  }
+}
+
+impl<T> Add<T> for DeclarationInfo {
+  type Output = Declaration<T>;
+
+  fn add(self, rhs: T) -> Self::Output {
+    self.with(rhs)
+  }
+}
+
+impl Display for DeclarationInfo {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "at line {}", self.line_nr)
   }
 }
 

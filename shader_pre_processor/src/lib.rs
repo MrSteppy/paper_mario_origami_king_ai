@@ -6,7 +6,8 @@ use std::str::FromStr;
 
 use enum_assoc::Assoc;
 
-use crate::environment::{PreProcessingCache, PreProcessingEnvironment};
+use crate::environment::{Declaration, PreProcessingCache, PreProcessingEnvironment, StructLayout};
+use crate::struct_definition::{StructDefinition, StructDefinitionError};
 
 pub mod environment;
 mod memory_layout;
@@ -68,6 +69,15 @@ where
     file: shader_file.to_path_buf(),
   })?;
 
+  for struct_declaration in StructDefinition::from_source(&shader_source) {
+    let (info, definition) = struct_declaration.separate();
+    let definition =
+      definition.map_err(|e| PreProcessingError::InvalidStructDefinition(info.clone() + e))?;
+    if let Some(previous_declaration) = pre_processing_cache.insert(info + definition) {
+      //TODO multi declaration error
+    }
+  }
+
   let mut source_code = String::new();
   for (line_index, line) in shader_source.lines().enumerate() {
     let line_nr = line_index + 1;
@@ -107,9 +117,31 @@ where
     }
 
     if let Some(stmt_info) = Statement::GenRepr.match_line(line) {
-      //TODO make sure next line has definition and prevent type recursion
+      //make sure next line has definition
+      let declaration = pre_processing_cache
+        .structs_mut()
+        .values_mut()
+        .find(|declaration| declaration.info.line_nr == line_nr + 1)
+        .ok_or(PreProcessingError::statement(
+          shader_file,
+          line_nr,
+          line,
+          "statement may only annotate a struct",
+        ))?;
 
-      //TODO parse repr name
+      //parse repr name
+      let repr_name = Some(stmt_info.arg_str.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(format!("{}Repr", declaration.declared.name()));
+      
+      match &mut declaration.declared {
+        StructLayout::Simple(struct_definition) => {
+          
+        }
+        StructLayout::Detailed { composition, .. } => {
+          
+        }
+      }
 
       //TODO create memory layout
 
@@ -143,6 +175,8 @@ pub enum PreProcessingError {
     line: String,
     detail_message: String,
   },
+  InvalidStructDefinition(Declaration<StructDefinitionError>),
+  StructNameDuplication(Declaration<StructDefinition>),
 }
 
 impl PreProcessingError {
@@ -177,6 +211,12 @@ impl Display for PreProcessingError {
         "Invalid statement at {:?}:{} near '{}': {}",
         file, line_nr, line, detail_message
       ),
+      PreProcessingError::InvalidStructDefinition(declaration) => {
+        write!(f, "Invalid struct declaration: {declaration}")
+      }
+      PreProcessingError::StructNameDuplication(previous_declaration) => {
+        write!(f, "A struct with the same name has already been declared {}", previous_declaration.info)
+      }
     }
   }
 }
