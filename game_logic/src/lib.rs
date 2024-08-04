@@ -143,7 +143,10 @@ pub fn parse(arena: &mut SolvableArena, command: &str) -> Result<(), ParseError>
       };
       let positions = parse_positions(cmd, rows_arg)?;
       for position in positions {
-        arena.add(Enemy { position, required_attack });
+        arena.add(Enemy {
+          position,
+          required_attack,
+        });
       }
       arena.show();
     }

@@ -196,11 +196,14 @@ impl Coverage {
     equipment: &AvailableEquipment,
   ) -> bool {
     //enemies which require a hammer covered by long areas require a throwing hammer
-    !matches!((
-      &covering_area.target_area,
-      &enemy.required_attack,
-      equipment.throwing_hammer,
-    ), (TargetArea::Long { .. }, Some(RequiredAttack::Hammer), false))
+    !matches!(
+      (
+        &covering_area.target_area,
+        &enemy.required_attack,
+        equipment.throwing_hammer,
+      ),
+      (TargetArea::Long { .. }, Some(RequiredAttack::Hammer), false)
+    )
   }
 
   pub fn can_hold(&self, area: &TargetArea) -> bool {

@@ -65,7 +65,7 @@ macro_rules! resource_path {
 /// <strong>Example<strong>
 /// ```
 /// use gui::include_resource_str;
-/// 
+///
 /// let data = include_resource_str!(test/test_data.txt); //includes resources/test/test_data.txt
 /// ```
 #[macro_export]
@@ -80,7 +80,7 @@ macro_rules! include_resource_str {
 /// <strong>Example<strong>
 /// ```rust
 /// use gui::include_resource_bytes;
-/// 
+///
 /// let bytes = include_resource_bytes!(test/test_data.txt); //includes resources/test/test_data.txt
 /// ```
 #[macro_export]
@@ -94,6 +94,6 @@ macro_rules! include_resource_bytes {
 mod test_include {
   #[test]
   fn test_include_str() {
-    assert_eq!("foo bar", include_resource_str!(test/test_data.txt));
+    assert_eq!("foo bar", include_resource_str!(test / test_data.txt));
   }
 }

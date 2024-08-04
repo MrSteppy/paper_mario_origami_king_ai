@@ -2,7 +2,15 @@ use std::iter::once;
 use std::sync::Arc;
 
 use glam::{Vec3, Vec4};
-use wgpu::{BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Face, FilterMode, IndexFormat, Instance, LoadOp, Operations, PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerDescriptor, StoreOp, Surface, SurfaceConfiguration, SurfaceError, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexStepMode};
+use wgpu::{
+  BlendState, Buffer, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor,
+  CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Face, FilterMode, IndexFormat, Instance,
+  LoadOp, Operations, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
+  RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+  RequestAdapterOptions, SamplerDescriptor, StoreOp, Surface, SurfaceConfiguration, SurfaceError,
+  TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
+  VertexStepMode,
+};
 use wgpu::util::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -12,8 +20,8 @@ use crate::include_resource_bytes;
 use crate::shader::{shader, texture_shader};
 use crate::shader::shader::VertexInput;
 
-mod pipelines;
 mod coordinates;
+mod pipelines;
 
 const BACKGROUND_COLOR: Color = Color {
   r: 0.0,
@@ -283,7 +291,6 @@ impl Renderer {
     render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 
     drop(render_pass); //must be dropped before the encoder can be finished
-
 
     self.queue.submit(once(encoder.finish()));
     canvas.present();

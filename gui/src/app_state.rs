@@ -34,7 +34,7 @@ impl Default for AppState {
       arena_ground,
       number_of_turns: 2,
       current_solution: None,
-      height: 0
+      height: 0,
     }
   }
 }

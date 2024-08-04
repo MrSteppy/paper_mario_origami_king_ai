@@ -455,9 +455,18 @@ mod test_move {
 
   #[test]
   fn test_normalized() {
-    assert_eq!(Move::from_str("r1 -3").unwrap(), Move::from_str("r1 9").unwrap().normalized());
-    assert_eq!(Move::from_str("c2 2").unwrap(), Move::from_str("c8 -2").unwrap().normalized());
-    assert_eq!(Move::from_str("c3 4").unwrap(), Move::from_str("c9 4").unwrap().normalized());
+    assert_eq!(
+      Move::from_str("r1 -3").unwrap(),
+      Move::from_str("r1 9").unwrap().normalized()
+    );
+    assert_eq!(
+      Move::from_str("c2 2").unwrap(),
+      Move::from_str("c8 -2").unwrap().normalized()
+    );
+    assert_eq!(
+      Move::from_str("c3 4").unwrap(),
+      Move::from_str("c9 4").unwrap().normalized()
+    );
   }
 
   #[test]

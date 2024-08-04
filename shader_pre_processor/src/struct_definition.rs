@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 use once_cell_regex::exports::regex::{Captures, Regex};
 use once_cell_regex::regex;
 
-use crate::environment::{Declaration, DeclarationInfo, SourceLocation};
+use crate::declaration::{Declaration, DeclarationInfo, SourceLocation};
 use crate::write_member;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -28,7 +28,7 @@ impl StructDefinition {
   ) -> Vec<Declaration<Result<StructDefinition, StructDefinitionError>>>
   where
     S: AsRef<str>,
-    L: Into<SourceLocation>
+    L: Into<SourceLocation>,
   {
     let shader_source = shader_source.as_ref();
     let source_location = source_location.into();
@@ -142,7 +142,7 @@ impl Display for StructMember {
 mod test {
   use std::path::Path;
 
-  use crate::environment::{Declaration, DeclarationInfo, SourceLocation};
+  use crate::declaration::{Declaration, DeclarationInfo, SourceLocation};
   use crate::struct_definition::{StructDefinition, StructMember};
 
   #[test]

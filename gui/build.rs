@@ -5,9 +5,9 @@ use std::process::Command;
 use wgsl_to_wgpu::{create_shader_module, MatrixVectorTypes, WriteOptions};
 
 use shader_pre_processor::{pre_process_shader, ProcessContext};
-use shader_pre_processor::environment::{
-  PreProcessingCache, PreProcessingEnvironment, PrimitiveType,
-};
+use shader_pre_processor::environment::PreProcessingEnvironment;
+use shader_pre_processor::pre_processing_cache::PreProcessingCache;
+use shader_pre_processor::primitive_composition::primitive_type::PrimitiveType;
 
 const INCLUDE_HOOK_POINT: &str = "INCLUDE_HOOK_POINT";
 

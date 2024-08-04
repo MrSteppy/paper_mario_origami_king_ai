@@ -5,11 +5,17 @@ use crate::position::{Move, Position};
 
 ///An arena where something can stand
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Arena<E> where E: Clone {
+pub struct Arena<E>
+where
+  E: Clone,
+{
   pub enemies: Vec<E>,
 }
 
-impl<E> Arena<E> where E: Clone + Deref<Target=Position> {
+impl<E> Arena<E>
+where
+  E: Clone + Deref<Target = Position>,
+{
   pub fn add(&mut self, enemy: E) {
     if let Some(present) = self.get_at_mut(&enemy) {
       *present = enemy
@@ -27,15 +33,24 @@ impl<E> Arena<E> where E: Clone + Deref<Target=Position> {
   }
 
   pub fn get_at_mut(&mut self, at: &Position) -> Option<&mut E> {
-    self.enemies.iter_mut().find(|enemy| enemy.deref() as &Position == at)
+    self
+      .enemies
+      .iter_mut()
+      .find(|enemy| enemy.deref() as &Position == at)
   }
-  
-  pub fn show(&self) where E: ToArenaSymbol {
+
+  pub fn show(&self)
+  where
+    E: ToArenaSymbol,
+  {
     println!("{}", self)
   }
 }
 
-impl<E> Arena<E> where E: Clone + DerefMut<Target=Position> {
+impl<E> Arena<E>
+where
+  E: Clone + DerefMut<Target = Position>,
+{
   pub fn apply_move(&mut self, move_: Move) {
     for enemy in &mut self.enemies {
       enemy.apply_move(move_);
@@ -43,7 +58,10 @@ impl<E> Arena<E> where E: Clone + DerefMut<Target=Position> {
   }
 }
 
-impl<E> Default for Arena<E> where E: Clone {
+impl<E> Default for Arena<E>
+where
+  E: Clone,
+{
   fn default() -> Self {
     Self {
       enemies: Vec::with_capacity(16),
@@ -51,7 +69,10 @@ impl<E> Default for Arena<E> where E: Clone {
   }
 }
 
-impl<E> Display for Arena<E> where E: Clone + Deref<Target=Position> + ToArenaSymbol {
+impl<E> Display for Arena<E>
+where
+  E: Clone + Deref<Target = Position> + ToArenaSymbol,
+{
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     let sym = |c, r| {
       if let Some(enemy) = self.get_at(&Position::at(r, c).expect("can not display")) {
@@ -155,4 +176,3 @@ impl<E> Display for Arena<E> where E: Clone + Deref<Target=Position> + ToArenaSy
 pub trait ToArenaSymbol {
   fn to_arena_symbol(&self) -> char;
 }
-

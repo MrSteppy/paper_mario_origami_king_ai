@@ -5,12 +5,21 @@ use std::path::{Path, PathBuf};
 
 use enum_assoc::Assoc;
 
-use crate::environment::{Declaration, PreProcessingCache, PreProcessingEnvironment, StructLayout};
+use declaration::Declaration;
+use pre_processing_cache::PreProcessingCache;
+use primitive_composition::PrimitiveComposition;
+use struct_layout::StructLayout;
+
+use crate::environment::PreProcessingEnvironment;
 use crate::struct_definition::{StructDefinition, StructDefinitionError};
 
+pub mod declaration;
 pub mod environment;
-mod memory_layout;
-mod struct_definition;
+pub mod memory_layout;
+pub mod pre_processing_cache;
+pub mod primitive_composition;
+pub mod struct_definition;
+pub mod struct_layout;
 
 ///The prefix of every pre-processor statement
 pub const STMT_PREFIX: &str = "#";
@@ -135,11 +144,6 @@ where
         .filter(|s| !s.is_empty())
         .unwrap_or(format!("{}Repr", declaration.declared.name()));
 
-      match &mut declaration.declared {
-        StructLayout::Simple(struct_definition) => {}
-        StructLayout::Detailed { composition, .. } => {}
-      }
-
       //TODO create memory layout
 
       //TODO generate struct representation
@@ -150,6 +154,13 @@ where
   }
 
   Ok(Some(source_code))
+}
+
+fn create_primitive_composition(
+  struct_definition: &StructDefinition,
+  environment: &PreProcessingEnvironment,
+) -> PrimitiveComposition {
+  todo!()
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
@@ -248,8 +259,9 @@ where
 
 #[cfg(test)]
 mod test {
-  use crate::{pre_process_shader, PreProcessingCache, ProcessContext};
+  use crate::{pre_process_shader, ProcessContext};
   use crate::environment::PreProcessingEnvironment;
+  use crate::pre_processing_cache::PreProcessingCache;
 
   #[test]
   fn test_pre_processing() {
