@@ -14,6 +14,24 @@ pub struct StructDefinition {
 }
 
 impl StructDefinition {
+  pub fn new<S>(name: S) -> Self
+  where
+    S: ToString,
+  {
+    Self {
+      name: name.to_string(),
+      members: vec![],
+    }
+  }
+
+  pub fn with<M>(mut self, member: M) -> Self
+  where
+    M: Into<StructMember>,
+  {
+    self.members.push(member.into());
+    self
+  }
+
   fn struct_regex() -> &'static Regex {
     regex!(r"struct (?<name>\S+)\s*\{(?<content>[\s\S]*?)};?")
   }
@@ -92,7 +110,7 @@ impl StructDefinition {
       members.push(StructMember {
         annotation_values: annotations,
         name: member_name,
-        r#type: member_type,
+        type_name: member_type,
       });
     }
 
@@ -129,12 +147,36 @@ impl Error for StructDefinitionError {}
 pub struct StructMember {
   pub annotation_values: Vec<String>,
   pub name: String,
-  pub r#type: String,
+  pub type_name: String,
+}
+
+impl StructMember {
+  pub fn new<S, T>(name: S, type_name: T) -> Self
+  where
+    S: ToString,
+    T: ToString,
+  {
+    Self::new_annotated::<&str, _, _>(&[], name, type_name)
+  }
+
+  #[inline]
+  pub fn new_annotated<A, S, T>(annotation_values: &[A], name: S, type_name: T) -> Self
+  where
+    A: ToString,
+    S: ToString,
+    T: ToString,
+  {
+    Self {
+      annotation_values: annotation_values.iter().map(|a| a.to_string()).collect(),
+      name: name.to_string(),
+      type_name: type_name.to_string(),
+    }
+  }
 }
 
 impl Display for StructMember {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write_member(f, &self.annotation_values, &self.name, &self.r#type)
+    write_member(f, &self.annotation_values, &self.name, &self.type_name)
   }
 }
 
@@ -162,12 +204,12 @@ mod test {
             StructMember {
               annotation_values: vec!["location(0)".to_string()],
               name: "x".to_string(),
-              r#type: "u32".to_string(),
+              type_name: "u32".to_string(),
             },
             StructMember {
               annotation_values: vec!["location(1)".to_string()],
               name: "y".to_string(),
-              r#type: "u32".to_string(),
+              type_name: "u32".to_string(),
             }
           ],
         })

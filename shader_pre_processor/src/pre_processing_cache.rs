@@ -13,6 +13,10 @@ pub struct PreProcessingCache {
 }
 
 impl PreProcessingCache {
+  pub fn new() -> Self {
+    Self::default()
+  }
+  
   pub fn structs(&self) -> &HashMap<String, Declaration<StructLayout>> {
     &self.struct_layouts
   }
