@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 use once_cell_regex::exports::regex::{Captures, Regex};
 use once_cell_regex::regex;
 
-use crate::environment::{Declaration, DeclarationInfo};
+use crate::environment::{Declaration, DeclarationInfo, SourceLocation};
 use crate::write_member;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -22,13 +22,16 @@ impl StructDefinition {
     regex!(r"\s*(?<annotations>(@\S+\s*)*)(?<name>\S+): (?<type>\S+),\s*")
   }
 
-  pub fn from_source<S>(
+  pub fn from_source<S, L>(
     shader_source: S,
+    source_location: L,
   ) -> Vec<Declaration<Result<StructDefinition, StructDefinitionError>>>
   where
     S: AsRef<str>,
+    L: Into<SourceLocation>
   {
     let shader_source = shader_source.as_ref();
+    let source_location = source_location.into();
 
     let mut struct_definitions = vec![];
     for struct_captures in Self::struct_regex().captures_iter(shader_source) {
@@ -41,7 +44,7 @@ impl StructDefinition {
         + 1;
 
       struct_definitions.push(Declaration::new(
-        DeclarationInfo::new(line_nr),
+        DeclarationInfo::new(source_location.clone() + line_nr),
         Self::from_captures(struct_captures),
       ));
     }
@@ -137,7 +140,9 @@ impl Display for StructMember {
 
 #[cfg(test)]
 mod test {
-  use crate::environment::{Declaration, DeclarationInfo};
+  use std::path::Path;
+
+  use crate::environment::{Declaration, DeclarationInfo, SourceLocation};
   use crate::struct_definition::{StructDefinition, StructMember};
 
   #[test]
@@ -146,10 +151,11 @@ mod test {
       @location(0) x: u32,
       @location(1) y: u32,
     }";
-    let definitions = StructDefinition::from_source(shader_source);
+    let source_path = Path::new(":memory:");
+    let definitions = StructDefinition::from_source(shader_source, source_path);
     assert_eq!(
       vec![Declaration::new(
-        DeclarationInfo::new(1),
+        DeclarationInfo::new(SourceLocation::at(source_path, 1)),
         Ok(StructDefinition {
           name: "Pixel".to_string(),
           members: vec![

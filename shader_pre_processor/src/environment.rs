@@ -4,8 +4,8 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::iter::once;
-use std::ops::Add;
-use std::path::PathBuf;
+use std::ops::{Add, AddAssign};
+use std::path::{Path, PathBuf};
 
 use crate::struct_definition::StructDefinition;
 use crate::write_member;
@@ -20,20 +20,9 @@ impl PreProcessingCache {
   pub fn structs(&self) -> &HashMap<String, Declaration<StructLayout>> {
     &self.struct_layouts
   }
-  
+
   pub fn structs_mut(&mut self) -> &mut HashMap<String, Declaration<StructLayout>> {
     &mut self.struct_layouts
-  }
-
-  #[deprecated]
-  pub fn cache<S>(&mut self, layout: S)
-  where
-    S: Into<StructLayout>,
-  {
-    let layout = layout.into();
-    self
-      .struct_layouts
-      .insert(layout.name().to_string(), Declaration::new(DeclarationInfo::new(0), layout));
   }
 
   ///inserts a [`Declaration`] in the cache and returns the previous [`Declaration`], if present
@@ -92,7 +81,7 @@ impl<T> Declaration<T> {
       declared: declared.into(),
     }
   }
-  
+
   pub fn separate(self) -> (DeclarationInfo, T) {
     (self.info, self.declared)
   }
@@ -114,18 +103,70 @@ where
   }
 }
 
-//TODO use source position instead of just line_nr
-#[non_exhaustive]
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct DeclarationInfo {
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct SourceLocation {
+  pub source_file: PathBuf,
   pub line_nr: usize,
 }
 
-impl DeclarationInfo {
-  pub fn new(line_nr: usize) -> Self {
+impl From<&Path> for SourceLocation {
+  fn from(value: &Path) -> Self {
+    Self::new(value)
+  }
+}
+
+impl SourceLocation {
+  pub fn new<P>(source_file: P) -> Self
+  where
+    P: AsRef<Path>,
+  {
     Self {
-      line_nr
+      source_file: source_file.as_ref().to_path_buf(),
+      line_nr: 0,
     }
+  }
+
+  pub fn at<P>(source_file: P, line_nr: usize) -> Self
+  where
+    P: AsRef<Path>,
+  {
+    Self {
+      source_file: source_file.as_ref().to_path_buf(),
+      line_nr,
+    }
+  }
+}
+
+impl Add<usize> for SourceLocation {
+  type Output = Self;
+
+  fn add(mut self, rhs: usize) -> Self::Output {
+    self.line_nr += rhs;
+    self
+  }
+}
+
+impl AddAssign<usize> for SourceLocation {
+  fn add_assign(&mut self, rhs: usize) {
+    self.line_nr += rhs;
+  }
+}
+
+impl Display for SourceLocation {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{:?}:{}", self.source_file, self.line_nr)
+  }
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DeclarationInfo {
+  pub source_location: SourceLocation,
+}
+
+impl DeclarationInfo {
+  pub fn new<S>(source_location: S) -> Self where S: Into<SourceLocation> {
+    Self { source_location: source_location.into() }
   }
 
   pub fn with<T>(self, declared: T) -> Declaration<T> {
@@ -143,7 +184,7 @@ impl<T> Add<T> for DeclarationInfo {
 
 impl Display for DeclarationInfo {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "at line {}", self.line_nr)
+    write!(f, "at {}", self.source_location)
   }
 }
 

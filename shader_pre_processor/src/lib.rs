@@ -2,7 +2,6 @@ use std::{fs, io};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use enum_assoc::Assoc;
 
@@ -69,7 +68,7 @@ where
     file: shader_file.to_path_buf(),
   })?;
 
-  for struct_declaration in StructDefinition::from_source(&shader_source) {
+  for struct_declaration in StructDefinition::from_source(&shader_source, shader_file) {
     let (info, definition) = struct_declaration.separate();
     let definition =
       definition.map_err(|e| PreProcessingError::InvalidStructDefinition(info.clone() + e))?;
@@ -121,7 +120,7 @@ where
       let declaration = pre_processing_cache
         .structs_mut()
         .values_mut()
-        .find(|declaration| declaration.info.line_nr == line_nr + 1)
+        .find(|declaration| declaration.info.source_location.line_nr == line_nr + 1)
         .ok_or(PreProcessingError::statement(
           shader_file,
           line_nr,
