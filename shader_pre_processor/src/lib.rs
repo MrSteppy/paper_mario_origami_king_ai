@@ -143,10 +143,13 @@ where
       let repr_name = Some(stmt_info.arg_str.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or(format!("{}Repr", declaration.declared.name()));
+      
+      //TODO convert layout to primitive composition
 
       //TODO create memory layout
 
       //TODO generate struct representation
+      
       continue;
     }
 

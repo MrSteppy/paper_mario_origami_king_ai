@@ -4,7 +4,11 @@ use std::iter::once;
 use composite_type::CompositeType;
 use primitive_type::PrimitiveType;
 
+use crate::environment::PreProcessingEnvironment;
 use crate::memory_layout::{MemoryLayout, PrimitiveMember};
+use crate::pre_processing_cache::PreProcessingCache;
+use crate::struct_definition::StructDefinition;
+use crate::struct_layout::StructLayout;
 
 pub mod composite_type;
 pub mod primitive_type;
@@ -28,6 +32,13 @@ impl From<CompositeType> for PrimitiveComposition {
 }
 
 impl PrimitiveComposition {
+  pub fn from_struct_definition<T>(struct_definition: &StructDefinition, resolver: T) -> Self
+  where
+    T: TypeNameResolver,
+  {
+    todo!()
+  }
+
   pub fn primitive_iter(&self) -> impl Iterator<Item = &PrimitiveType> {
     match self {
       PrimitiveComposition::Primitive(primitive) => {
@@ -88,5 +99,50 @@ impl Display for PrimitiveComposition {
       PrimitiveComposition::Primitive(primitive) => Display::fmt(primitive, f),
       PrimitiveComposition::Composite(composite) => Display::fmt(composite, f),
     }
+  }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum TypeRef<'a> {
+  StructLayout(&'a StructLayout),
+  PrimitiveComposition(&'a PrimitiveComposition),
+}
+
+impl<'a> From<&'a StructLayout> for TypeRef<'a> {
+  fn from(value: &'a StructLayout) -> Self {
+    Self::StructLayout(value)
+  }
+}
+
+impl<'a> From<&'a PrimitiveComposition> for TypeRef<'a> {
+  fn from(value: &'a PrimitiveComposition) -> Self {
+    Self::PrimitiveComposition(value)
+  }
+}
+
+pub trait TypeNameResolver {
+  fn resolve(&self, name: &str) -> Option<TypeRef>;
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SimpleStructNameResolver<'a> {
+  pub environment: &'a PreProcessingEnvironment,
+  pub cache: &'a PreProcessingCache,
+}
+
+impl TypeNameResolver for SimpleStructNameResolver<'_> {
+  fn resolve(&self, struct_name: &str) -> Option<TypeRef> {
+    self
+      .environment
+      .types()
+      .get(struct_name)
+      .map(|composition| composition.into())
+      .or_else(|| {
+        self
+          .cache
+          .structs()
+          .get(struct_name)
+          .map(|declaration| (&declaration.declared).into())
+      })
   }
 }
