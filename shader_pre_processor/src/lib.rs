@@ -73,7 +73,9 @@ where
     let definition =
       definition.map_err(|e| PreProcessingError::InvalidStructDefinition(info.clone() + e))?;
     if let Some(previous_declaration) = pre_processing_cache.insert(info + definition) {
-      //TODO multi declaration error
+      return Err(PreProcessingError::StructNameDuplication(
+        previous_declaration,
+      ));
     }
   }
 
@@ -132,14 +134,10 @@ where
       let repr_name = Some(stmt_info.arg_str.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or(format!("{}Repr", declaration.declared.name()));
-      
+
       match &mut declaration.declared {
-        StructLayout::Simple(struct_definition) => {
-          
-        }
-        StructLayout::Detailed { composition, .. } => {
-          
-        }
+        StructLayout::Simple(struct_definition) => {}
+        StructLayout::Detailed { composition, .. } => {}
       }
 
       //TODO create memory layout
@@ -175,7 +173,7 @@ pub enum PreProcessingError {
     detail_message: String,
   },
   InvalidStructDefinition(Declaration<StructDefinitionError>),
-  StructNameDuplication(Declaration<StructDefinition>),
+  StructNameDuplication(Declaration<StructLayout>),
 }
 
 impl PreProcessingError {
@@ -214,7 +212,11 @@ impl Display for PreProcessingError {
         write!(f, "Invalid struct declaration: {declaration}")
       }
       PreProcessingError::StructNameDuplication(previous_declaration) => {
-        write!(f, "A struct with the same name has already been declared {}", previous_declaration.info)
+        write!(
+          f,
+          "A struct with the same name has already been declared {}",
+          previous_declaration.info
+        )
       }
     }
   }
