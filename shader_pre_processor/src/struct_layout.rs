@@ -1,4 +1,4 @@
-use crate::primitive_composition::PrimitiveComposition;
+use crate::primitive_composition::{ConversionError, PrimitiveComposition, TypeNameResolver};
 use crate::struct_definition::StructDefinition;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -32,18 +32,26 @@ impl StructLayout {
       StructLayout::Detailed { composition, .. } => composition.name(),
     }
   }
-  
+
   #[inline]
-  pub fn create_primitive_composition(&mut self) -> &mut PrimitiveComposition {
+  pub fn create_primitive_composition<T>(
+    &mut self,
+    resolver: &mut T,
+  ) -> Result<&mut PrimitiveComposition, ConversionError>
+  where
+    T: TypeNameResolver,
+  {
     match self {
       StructLayout::Simple(struct_definition) => {
-        let composition = todo!("convert struct definition to primitive composition");
-        *self = Self::Detailed {composition, generated_representation: None};
-        self.create_primitive_composition()
+        let composition =
+          PrimitiveComposition::from_struct_definition(struct_definition, resolver)?;
+        *self = Self::Detailed {
+          composition,
+          generated_representation: None,
+        };
+        self.create_primitive_composition(resolver)
       }
-      StructLayout::Detailed { composition, .. } => {
-        composition
-      }
+      StructLayout::Detailed { composition, .. } => Ok(composition),
     }
   }
 }

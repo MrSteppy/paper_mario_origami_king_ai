@@ -36,7 +36,7 @@ impl From<CompositeType> for PrimitiveComposition {
 impl PrimitiveComposition {
   pub fn from_struct_definition<T>(
     struct_definition: &StructDefinition,
-    resolver: &T,
+    resolver: &mut T,
   ) -> Result<Self, ConversionError>
   where
     T: TypeNameResolver,
@@ -46,7 +46,7 @@ impl PrimitiveComposition {
 
   pub fn from_struct_definition_with_stack<T>(
     struct_definition: &StructDefinition,
-    resolver: &T,
+    resolver: &mut T,
     processing_stack: &mut Vec<ProcessingStackElement>,
   ) -> Result<Self, ConversionError>
   where
@@ -55,41 +55,38 @@ impl PrimitiveComposition {
     let mut composite = CompositeType::new(&struct_definition.name);
 
     for member in &struct_definition.members {
-      let type_ref = resolver
+      let layout = resolver
         .resolve(&member.type_name)
         .ok_or(ConversionError::UnknownType {
           name: member.type_name.clone(),
         })?;
-      let owned_composition;
-      let member_composition = match type_ref {
-        TypeRef::StructLayout(layout_ref) => match layout_ref {
-          StructLayout::Simple(member_type_definition) => {
-            processing_stack.push(ProcessingStackElement {
-              struct_name: struct_definition.name.clone(),
-              field_name: member.name.clone(),
+      let member_composition = match layout {
+        StructLayout::Simple(member_type_definition) => {
+          processing_stack.push(ProcessingStackElement {
+            struct_name: struct_definition.name.clone(),
+            field_name: member.name.clone(),
+          });
+          let type_recursion_stack: Vec<_> = processing_stack
+            .iter()
+            .skip_while(|element| element.struct_name != member_type_definition.name)
+            .cloned()
+            .collect();
+          if !type_recursion_stack.is_empty() {
+            return Err(ConversionError::TypeRecursion {
+              processing_stack: type_recursion_stack,
+              type_name: member_type_definition.name.clone(),
             });
-            let type_recursion_stack: Vec<_> = processing_stack
-              .iter()
-              .skip_while(|element| element.struct_name != member_type_definition.name)
-              .cloned()
-              .collect();
-            if !type_recursion_stack.is_empty() {
-              return Err(ConversionError::TypeRecursion {
-                processing_stack: type_recursion_stack,
-                type_name: member_type_definition.name.clone(),
-              });
-            }
-
-            owned_composition = Self::from_struct_definition_with_stack(
-              member_type_definition,
-              resolver,
-              processing_stack,
-            )?;
-            &owned_composition
           }
-          StructLayout::Detailed { composition, .. } => composition,
-        },
-        TypeRef::PrimitiveComposition(composition) => composition,
+
+          let composition = Self::from_struct_definition_with_stack(
+            &member_type_definition,
+            resolver,
+            processing_stack,
+          )?;
+          resolver.cache(composition.clone());
+          composition
+        }
+        StructLayout::Detailed { composition, .. } => composition,
       };
 
       composite.add(Member::new_annotated(
@@ -210,54 +207,45 @@ impl Display for ConversionError {
 
 impl Error for ConversionError {}
 
-#[derive(Debug, Copy, Clone)]
-pub enum TypeRef<'a> {
-  StructLayout(&'a StructLayout),
-  PrimitiveComposition(&'a PrimitiveComposition),
-}
-
-impl<'a> From<&'a StructLayout> for TypeRef<'a> {
-  fn from(value: &'a StructLayout) -> Self {
-    Self::StructLayout(value)
-  }
-}
-
-impl<'a> From<&'a PrimitiveComposition> for TypeRef<'a> {
-  fn from(value: &'a PrimitiveComposition) -> Self {
-    Self::PrimitiveComposition(value)
-  }
-}
-
 pub trait TypeNameResolver {
-  fn resolve(&self, name: &str) -> Option<TypeRef>;
+  fn resolve(&self, name: &str) -> Option<StructLayout>;
+
+  fn cache(&mut self, primitive_composition: PrimitiveComposition);
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct SimpleStructNameResolver<'a> {
   pub environment: &'a PreProcessingEnvironment,
-  pub cache: &'a PreProcessingCache,
+  pub cache: &'a mut PreProcessingCache,
 }
 
 impl<'a> SimpleStructNameResolver<'a> {
-  pub fn new(environment: &'a PreProcessingEnvironment, cache: &'a PreProcessingCache) -> Self {
+  pub fn new(environment: &'a PreProcessingEnvironment, cache: &'a mut PreProcessingCache) -> Self {
     Self { environment, cache }
   }
 }
 
 impl TypeNameResolver for SimpleStructNameResolver<'_> {
-  fn resolve(&self, struct_name: &str) -> Option<TypeRef> {
+  fn resolve(&self, struct_name: &str) -> Option<StructLayout> {
     self
       .environment
       .types()
       .get(struct_name)
-      .map(|composition| composition.into())
+      .map(|composition| composition.clone().into())
       .or_else(|| {
         self
           .cache
           .structs()
           .get(struct_name)
-          .map(|declaration| (&declaration.declared).into())
+          .map(|declaration| declaration.declared.clone().into())
       })
+  }
+
+  fn cache(&mut self, primitive_composition: PrimitiveComposition) {
+    self
+      .cache
+      .update(primitive_composition)
+      .expect("caching primitive composition without cached declaration");
   }
 }
 
@@ -277,11 +265,12 @@ mod test {
       .with(StructMember::new("y", "u32"));
     let u32_type = PrimitiveType::new("u32", 4, "u32");
     let environment = PreProcessingEnvironment::new().with(u32_type.clone());
-    let cache = PreProcessingCache::new();
-    let resolver = SimpleStructNameResolver::new(&environment, &cache);
+    let mut cache = PreProcessingCache::new();
+    let mut resolver = SimpleStructNameResolver::new(&environment, &mut cache);
 
-    let composition = PrimitiveComposition::from_struct_definition(&struct_definition, &resolver)
-      .expect("conversion error");
+    let composition =
+      PrimitiveComposition::from_struct_definition(&struct_definition, &mut resolver)
+        .expect("conversion error");
 
     assert_eq!(
       PrimitiveComposition::Composite(

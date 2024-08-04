@@ -11,6 +11,7 @@ use primitive_composition::PrimitiveComposition;
 use struct_layout::StructLayout;
 
 use crate::environment::PreProcessingEnvironment;
+use crate::primitive_composition::SimpleStructNameResolver;
 use crate::struct_definition::{StructDefinition, StructDefinitionError};
 
 pub mod declaration;
@@ -128,28 +129,32 @@ where
 
     if let Some(stmt_info) = Statement::GenRepr.match_line(line) {
       //make sure next line has definition
-      let declaration = pre_processing_cache
-        .structs_mut()
-        .values_mut()
+      let mut declaration = pre_processing_cache
+        .structs()
+        .values()
         .find(|declaration| declaration.info.source_location.line_nr == line_nr + 1)
         .ok_or(PreProcessingError::statement(
           shader_file,
           line_nr,
           line,
           "statement may only annotate a struct",
-        ))?;
+        ))?
+        .clone();
 
       //parse repr name
       let repr_name = Some(stmt_info.arg_str.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or(format!("{}Repr", declaration.declared.name()));
-      
-      //TODO convert layout to primitive composition
+
+      //convert layout to primitive composition
+      let mut resolver = SimpleStructNameResolver::new(environment, pre_processing_cache);
+      //TODO process result
+      let primitive_composition = declaration.declared.create_primitive_composition(&mut resolver);
 
       //TODO create memory layout
 
       //TODO generate struct representation
-      
+
       continue;
     }
 
