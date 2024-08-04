@@ -13,9 +13,12 @@ winit = { version = "0.30.4", features = ["android-native-activity"] }
 [package.metadata.android]
 package = "steptech.papermarioorigamikingai"
 build_targets = ["armv7-linux-androideabi", "aarch64-linux-android", "i686-linux-android", "x86_64-linux-android"]
+resources = "res"
+
+[package.metadata.android.application]
 apk_name = "paper_mario_origami_king_ai"
 label = "Paper Mario: The Origami King AI"
-icon = "app_icon.png"
+icon = "@drawable/app_icon"
 
 [package.metadata.android.sdk]
 min_sdk_version = 26
