@@ -3,13 +3,14 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
-use crate::declaration::Declaration;
-use crate::struct_layout::StructLayout;
+use crate::type_analysis::declared_type::DeclaredType;
+use crate::type_analysis::named_type::NamedType;
+use crate::type_analysis::source_location::Declaration;
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct PreProcessingCache {
   pub includes: HashSet<PathBuf>,
-  struct_layouts: HashMap<String, Declaration<StructLayout>>,
+  struct_layouts: HashMap<String, Declaration<DeclaredType>>,
 }
 
 impl PreProcessingCache {
@@ -17,18 +18,18 @@ impl PreProcessingCache {
     Self::default()
   }
   
-  pub fn structs(&self) -> &HashMap<String, Declaration<StructLayout>> {
+  pub fn structs(&self) -> &HashMap<String, Declaration<DeclaredType>> {
     &self.struct_layouts
   }
 
-  pub fn structs_mut(&mut self) -> &mut HashMap<String, Declaration<StructLayout>> {
+  pub fn structs_mut(&mut self) -> &mut HashMap<String, Declaration<DeclaredType>> {
     &mut self.struct_layouts
   }
 
   ///inserts a [`Declaration`] in the cache and returns the previous [`Declaration`], if present
-  pub fn insert<S>(&mut self, declaration: Declaration<S>) -> Option<Declaration<StructLayout>>
+  pub fn insert<S>(&mut self, declaration: Declaration<S>) -> Option<Declaration<DeclaredType>>
   where
-    S: Into<StructLayout>,
+    S: Into<DeclaredType>,
   {
     let declaration = declaration.convert(|info, s| info + s.into());
     self
@@ -39,9 +40,9 @@ impl PreProcessingCache {
   pub fn update<S>(
     &mut self,
     layout: S,
-  ) -> Result<&mut Declaration<StructLayout>, MissingDeclarationError>
+  ) -> Result<&mut Declaration<DeclaredType>, MissingDeclarationError>
   where
-    S: Into<StructLayout>,
+    S: Into<DeclaredType>,
   {
     let layout = layout.into();
     let declaration = self

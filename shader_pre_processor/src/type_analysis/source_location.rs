@@ -3,6 +3,7 @@ use std::ops::{Add, AddAssign};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+#[deprecated]
 pub struct Declaration<T> {
   pub info: DeclarationInfo,
   pub declared: T,

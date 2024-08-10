@@ -1,18 +1,13 @@
-use std::cmp::Ordering;
+use crate::type_analysis::named_type::NamedType;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-///Describes a type which can be directly converted from wgsl to wgpu, like `f32` or `vec4<f32>`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct PrimitiveType {
   pub name: String,
-  ///the size of this in terms of alignments.
-  /// To get the actual size use method [`Self::size`]
-  pub size_in_alignments: usize,
-  ///the power of two to how many bytes this is aligned
-  pub alignment_power: usize,
-  ///The fully qualified path to a rust equivalent type
   pub rust_equivalent: String,
+  pub size_in_alignments: usize,
+  pub alignment_power: u8,
 }
 
 impl PrimitiveType {
@@ -49,26 +44,30 @@ impl PrimitiveType {
     Ok(Self {
       name: name.to_string(),
       size_in_alignments: size / alignment,
-      alignment_power: alignment.ilog2() as usize,
+      alignment_power: u8::try_from(alignment.ilog2())
+        .map_err(|_| PrimitiveTypeCreationError::AlignmentTooBig)?,
       rust_equivalent: rust_equivalent.to_string(),
     })
   }
 
   #[inline]
+  pub const fn alignment(&self) -> usize {
+    1 << self.alignment_power
+  }
+
+  #[inline]
   pub const fn size(&self) -> usize {
-    (1 << self.alignment_power) * self.size_in_alignments
+    self.alignment() * self.size_in_alignments
   }
 }
 
-impl PartialOrd for PrimitiveType {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    Some(self.cmp(other))
+impl NamedType for PrimitiveType {
+  fn name(&self) -> &str {
+    &self.name
   }
-}
 
-impl Ord for PrimitiveType {
-  fn cmp(&self, other: &Self) -> Ordering {
-    self.size().cmp(&other.size())
+  fn rust_equivalent(&self) -> Option<&str> {
+    Some(&self.rust_equivalent)
   }
 }
 
@@ -80,7 +79,7 @@ impl Display for PrimitiveType {
       self.name,
       self.size_in_alignments,
       if self.alignment_power > 0 {
-        format!("x{}", self.alignment_power)
+        format!("x{}", self.alignment())
       } else {
         "".to_string()
       }
@@ -92,6 +91,7 @@ impl Display for PrimitiveType {
 pub enum PrimitiveTypeCreationError {
   InvalidAlignment,
   InvalidSize,
+  AlignmentTooBig,
 }
 
 impl Display for PrimitiveTypeCreationError {
@@ -102,6 +102,7 @@ impl Display for PrimitiveTypeCreationError {
       match self {
         PrimitiveTypeCreationError::InvalidAlignment => "Alignment has to be a power of 2",
         PrimitiveTypeCreationError::InvalidSize => "Size has to be a multiple of alignment",
+        PrimitiveTypeCreationError::AlignmentTooBig => "Alignment is too big",
       }
     )
   }
@@ -111,7 +112,7 @@ impl Error for PrimitiveTypeCreationError {}
 
 #[cfg(test)]
 mod test_primitive_type {
-  use crate::primitive_composition::primitive_type::PrimitiveType;
+  use crate::type_analysis::primitive_type::PrimitiveType;
 
   #[test]
   fn test_size() {

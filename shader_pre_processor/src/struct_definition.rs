@@ -4,10 +4,12 @@ use std::fmt::{Display, Formatter};
 use once_cell_regex::exports::regex::{Captures, Regex};
 use once_cell_regex::regex;
 
-use crate::declaration::{Declaration, DeclarationInfo, SourceLocation};
+use crate::type_analysis::source_location::{Declaration, DeclarationInfo, SourceLocation};
 use crate::write_member;
 
+///deprecated: use [`crate::type_analysis::declared_type::DeclaredType`] instead
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[deprecated]
 pub struct StructDefinition {
   pub name: String,
   pub members: Vec<StructMember>,
@@ -40,7 +42,7 @@ impl StructDefinition {
     regex!(r"\s*(?<annotations>(@\S+\s*)*)(?<name>\S+): (?<type>\S+),\s*")
   }
 
-  pub fn from_source<S, L>(
+  pub fn from_shader_source<S, L>(
     shader_source: S,
     source_location: L,
   ) -> Vec<Declaration<Result<StructDefinition, StructDefinitionError>>>
@@ -184,8 +186,8 @@ impl Display for StructMember {
 mod test {
   use std::path::Path;
 
-  use crate::declaration::{Declaration, DeclarationInfo, SourceLocation};
   use crate::struct_definition::{StructDefinition, StructMember};
+  use crate::type_analysis::source_location::{Declaration, DeclarationInfo, SourceLocation};
 
   #[test]
   fn test_parse_struct_definition() {
@@ -194,7 +196,7 @@ mod test {
       @location(1) y: u32,
     }";
     let source_path = Path::new(":memory:");
-    let definitions = StructDefinition::from_source(shader_source, source_path);
+    let definitions = StructDefinition::from_shader_source(shader_source, source_path);
     assert_eq!(
       vec![Declaration::new(
         DeclarationInfo::new(SourceLocation::at(source_path, 1)),

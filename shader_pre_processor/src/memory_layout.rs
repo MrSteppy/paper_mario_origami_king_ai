@@ -1,9 +1,10 @@
+use crate::type_analysis::member::Member;
+use crate::type_analysis::primitive_type::PrimitiveType;
 use std::fmt::{Display, Formatter};
-
-use crate::primitive_composition::primitive_type::PrimitiveType;
 
 ///Describes a field in a [`MemoryLayout`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[deprecated]
 pub struct PrimitiveMember {
   pub name: String,
   pub r#type: PrimitiveType,
@@ -34,7 +35,7 @@ impl Display for PrimitiveMember {
 
 ///Describes how a [`PrimitiveComposition`] will be lied out in memory
 pub struct MemoryLayout {
-  pub primitive_members: Vec<PrimitiveMember>,
+  pub primitive_members: Vec<Member<PrimitiveType>>,
   pub number_of_padding_bytes: usize,
 }
 
@@ -61,10 +62,10 @@ impl Display for MemoryLayout {
 
 #[cfg(test)]
 mod test_memory_layout_creation {
-  use crate::memory_layout::PrimitiveMember;
-  use crate::primitive_composition::composite_type::{CompositeType, Member};
-  use crate::primitive_composition::primitive_type::PrimitiveType;
+  use crate::primitive_composition::composite_type::CompositeType;
   use crate::primitive_composition::PrimitiveComposition;
+  use crate::type_analysis::member::Member;
+  use crate::type_analysis::primitive_type::PrimitiveType;
 
   #[test]
   fn test_create_memory_layout() {
@@ -78,11 +79,11 @@ mod test_memory_layout_creation {
     );
     let layout = composition.create_memory_layout();
     assert_eq!(
-      PrimitiveMember::new("_1", vec4_type.clone()),
+      Member::new("_1", vec4_type.clone()),
       layout.primitive_members[0]
     );
     assert_eq!(
-      PrimitiveMember::new("_0", vec3_type.clone()),
+      Member::new("_0", vec3_type.clone()),
       layout.primitive_members[1]
     );
     assert_eq!(4, layout.number_of_padding_bytes);

@@ -1,0 +1,79 @@
+@startuml
+'https://plantuml.com/class-diagram
+
+interface NamedType {
+  + name(&self) : &str
+  + rust_equivalent(&self) : Option<& str>
+}
+
+together {
+  together {
+    enum DeclaredType implements NamedType
+
+    class DeclaredType::Defined extends DeclaredType
+    DeclaredType::Defined *-- "1" DefinedType
+
+    class DeclaredType::Declared extends DeclaredType
+    DeclaredType::Declared *-- "1" TypeDeclaration
+  }
+
+  together {
+    enum DefinedType implements NamedType
+
+    class DefinedType::Primitive extends DefinedType
+    DefinedType::Primitive *-- "1" PrimitiveType
+
+    class DefinedType::Composite extends DefinedType
+    DefinedType::Composite *-- "1" CompositeType
+  }
+
+  together {
+    class NamedTypeParent implements NamedType {
+      + name: String
+      + rust_equivalent: Option<String>
+      + {static} new(name: ToString): Self
+      + with_rust_equivalent(self, rust_equivalent: ToString): Self
+    }
+
+    class TypeDeclaration extends NamedTypeParent implements NamedType {
+      + {static} new(name: ToString): Self
+      + with_rust_equivalent(self, rust_equivalent: ToString): Self
+      + with_member(self, member: Member<ToString>): Self
+      + add_member(&mut self, member: Member<ToString>)
+    }
+
+    TypeDeclaration *-- "1" NamedTypeParent: parent
+    TypeDeclaration *-- "*" Member : members: Vec<Member<String>>
+
+    class CompositeType extends NamedTypeParent implements NamedType {
+      + {static} new(name: ToString): Self
+      + with_rust_equivalent(self, rust_equivalent: ToString): Self
+      + with_member(self, member: Member<Into<DefinedType>>): Self
+      + add_member(&mut self, member: Member<Into<DefinedType>>)
+    }
+
+    CompositeType *-- "1" NamedTypeParent: parent
+    CompositeType *-- "*" Member : members: Vec<Member<DefinedType>>
+  }
+
+  class PrimitiveType implements NamedType {
+    + name: String
+    + rust_equivalent: String
+    + size_in_alignments: usize
+    + alignment_power: u8
+    + size(&self) : usize
+    + alignment(&self) : usize
+    + {static} new(name: ToString, size: usize, rust_equivalent: ToString) : Self
+    + {static} new_aligned(name: ToString, size: usize, alignment: usize, rust_equivalent: ToString) : Self
+  }
+}
+
+class Member<T: NamedType> {
+  + annotation_values: Vec<String>
+  + name: String
+  + type: T
+  + {static} new(name: ToString, type: T): Self
+  + {static} new_annotated(annotation_values: &[ToString], name: ToString, type: T): Self
+}
+
+@enduml

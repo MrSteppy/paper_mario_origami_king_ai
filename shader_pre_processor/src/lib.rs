@@ -1,26 +1,27 @@
-use std::{fs, io};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 use enum_assoc::Assoc;
 
-use declaration::Declaration;
 use pre_processing_cache::PreProcessingCache;
 use primitive_composition::PrimitiveComposition;
 use struct_layout::StructLayout;
+use type_analysis::source_location::Declaration;
 
 use crate::environment::PreProcessingEnvironment;
 use crate::primitive_composition::SimpleStructNameResolver;
 use crate::struct_definition::{StructDefinition, StructDefinitionError};
+use crate::type_analysis::named_type::NamedType;
 
-pub mod declaration;
 pub mod environment;
 pub mod memory_layout;
 pub mod pre_processing_cache;
 pub mod primitive_composition;
 pub mod struct_definition;
 pub mod struct_layout;
+pub mod type_analysis;
 
 ///The prefix of every pre-processor statement
 pub const STMT_PREFIX: &str = "#";
@@ -78,16 +79,7 @@ where
     file: shader_file.to_path_buf(),
   })?;
 
-  for struct_declaration in StructDefinition::from_source(&shader_source, shader_file) {
-    let (info, definition) = struct_declaration.separate();
-    let definition =
-      definition.map_err(|e| PreProcessingError::InvalidStructDefinition(info.clone() + e))?;
-    if let Some(previous_declaration) = pre_processing_cache.insert(info + definition) {
-      return Err(PreProcessingError::StructNameDuplication(
-        previous_declaration,
-      ));
-    }
-  }
+  //TODO first handle imports, after that analyse source code
 
   let mut source_code = String::new();
   for (line_index, line) in shader_source.lines().enumerate() {
@@ -149,7 +141,6 @@ where
       //convert layout to primitive composition
       let mut resolver = SimpleStructNameResolver::new(environment, pre_processing_cache);
       //TODO process result
-      let primitive_composition = declaration.declared.create_primitive_composition(&mut resolver);
 
       //TODO create memory layout
 
@@ -267,9 +258,9 @@ where
 
 #[cfg(test)]
 mod test {
-  use crate::{pre_process_shader, ProcessContext};
   use crate::environment::PreProcessingEnvironment;
   use crate::pre_processing_cache::PreProcessingCache;
+  use crate::{pre_process_shader, ProcessContext};
 
   #[test]
   fn test_pre_processing() {

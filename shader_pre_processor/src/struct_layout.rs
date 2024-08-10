@@ -1,23 +1,27 @@
 use crate::primitive_composition::{ConversionError, PrimitiveComposition, TypeNameResolver};
-use crate::struct_definition::StructDefinition;
+use crate::type_analysis::defined_type::DefinedType;
+use crate::type_analysis::named_type::NamedType;
+use crate::type_analysis::type_declaration::TypeDeclaration;
 
+///deprecated: Use [`crate::type_analysis::declared_type::DeclaredType`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[deprecated]
 pub enum StructLayout {
-  Simple(StructDefinition),
+  Simple(TypeDeclaration),
   Detailed {
-    composition: PrimitiveComposition,
+    composition: DefinedType,
     generated_representation: Option<ReprInfo>,
   },
 }
 
-impl From<StructDefinition> for StructLayout {
-  fn from(value: StructDefinition) -> Self {
+impl From<TypeDeclaration> for StructLayout {
+  fn from(value: TypeDeclaration) -> Self {
     Self::Simple(value)
   }
 }
 
-impl From<PrimitiveComposition> for StructLayout {
-  fn from(value: PrimitiveComposition) -> Self {
+impl From<DefinedType> for StructLayout {
+  fn from(value: DefinedType) -> Self {
     Self::Detailed {
       composition: value,
       generated_representation: None,
@@ -37,7 +41,7 @@ impl StructLayout {
   pub fn create_primitive_composition<T>(
     &mut self,
     resolver: &mut T,
-  ) -> Result<&mut PrimitiveComposition, ConversionError>
+  ) -> Result<&mut DefinedType, ConversionError>
   where
     T: TypeNameResolver,
   {

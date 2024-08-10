@@ -2,18 +2,16 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::iter::once;
 
-use composite_type::CompositeType;
-use primitive_type::PrimitiveType;
-
 use crate::environment::PreProcessingEnvironment;
 use crate::memory_layout::{MemoryLayout, PrimitiveMember};
 use crate::pre_processing_cache::PreProcessingCache;
-use crate::primitive_composition::composite_type::Member;
-use crate::struct_definition::StructDefinition;
-use crate::struct_layout::StructLayout;
-
-pub mod composite_type;
-pub mod primitive_type;
+use crate::type_analysis::composite_type::CompositeType;
+use crate::type_analysis::declared_type::DeclaredType;
+use crate::type_analysis::defined_type::DefinedType;
+use crate::type_analysis::member::Member;
+use crate::type_analysis::named_type::NamedType;
+use crate::type_analysis::primitive_type::PrimitiveType;
+use crate::type_analysis::type_declaration::TypeDeclaration;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum PrimitiveComposition {
@@ -35,9 +33,9 @@ impl From<CompositeType> for PrimitiveComposition {
 
 impl PrimitiveComposition {
   pub fn from_struct_definition<T>(
-    struct_definition: &StructDefinition,
+    struct_definition: &TypeDeclaration,
     resolver: &mut T,
-  ) -> Result<Self, ConversionError>
+  ) -> Result<DefinedType, ConversionError>
   where
     T: TypeNameResolver,
   {
@@ -45,36 +43,36 @@ impl PrimitiveComposition {
   }
 
   pub fn from_struct_definition_with_stack<T>(
-    struct_definition: &StructDefinition,
+    struct_definition: &TypeDeclaration,
     resolver: &mut T,
     processing_stack: &mut Vec<ProcessingStackElement>,
-  ) -> Result<Self, ConversionError>
+  ) -> Result<DefinedType, ConversionError>
   where
     T: TypeNameResolver,
   {
-    let mut composite = CompositeType::new(&struct_definition.name);
+    let mut composite = CompositeType::new(&struct_definition.name());
 
     for member in &struct_definition.members {
       let layout = resolver
-        .resolve(&member.type_name)
+        .resolve(&member.r#type)
         .ok_or(ConversionError::UnknownType {
-          name: member.type_name.clone(),
+          name: member.r#type.clone(),
         })?;
       let member_composition = match layout {
-        StructLayout::Simple(member_type_definition) => {
+        DeclaredType::Declared(member_type_definition) => {
           processing_stack.push(ProcessingStackElement {
             struct_name: struct_definition.name.clone(),
             field_name: member.name.clone(),
           });
           let type_recursion_stack: Vec<_> = processing_stack
             .iter()
-            .skip_while(|element| element.struct_name != member_type_definition.name)
+            .skip_while(|element| element.struct_name != member_type_definition.name())
             .cloned()
             .collect();
           if !type_recursion_stack.is_empty() {
             return Err(ConversionError::TypeRecursion {
               processing_stack: type_recursion_stack,
-              type_name: member_type_definition.name.clone(),
+              type_name: member_type_definition.name().to_string(),
             });
           }
 
@@ -86,10 +84,10 @@ impl PrimitiveComposition {
           resolver.cache(composition.clone());
           composition
         }
-        StructLayout::Detailed { composition, .. } => composition,
+        DeclaredType::Defined(composition) => composition,
       };
 
-      composite.add(Member::new_annotated(
+      composite.add_member(Member::new_annotated(
         &member.annotation_values,
         &member.name,
         member_composition.clone(),
@@ -109,11 +107,11 @@ impl PrimitiveComposition {
   }
 
   pub fn create_memory_layout(&self) -> MemoryLayout {
-    let mut primitive_members: Vec<_> = self
+    let mut primitive_members: Vec<Member<PrimitiveType>> = self
       .primitive_iter()
       .enumerate()
       .map(|(index, primitive)| {
-        PrimitiveMember::new(
+        Member::new(
           PrimitiveMember::member_name_for_index(index),
           primitive.clone(),
         )
@@ -208,9 +206,9 @@ impl Display for ConversionError {
 impl Error for ConversionError {}
 
 pub trait TypeNameResolver {
-  fn resolve(&self, name: &str) -> Option<StructLayout>;
+  fn resolve(&self, name: &str) -> Option<DeclaredType>;
 
-  fn cache(&mut self, primitive_composition: PrimitiveComposition);
+  fn cache(&mut self, primitive_composition: DefinedType);
 }
 
 #[derive(Debug)]
@@ -226,7 +224,7 @@ impl<'a> SimpleStructNameResolver<'a> {
 }
 
 impl TypeNameResolver for SimpleStructNameResolver<'_> {
-  fn resolve(&self, struct_name: &str) -> Option<StructLayout> {
+  fn resolve(&self, struct_name: &str) -> Option<DeclaredType> {
     self
       .environment
       .types()
@@ -241,7 +239,7 @@ impl TypeNameResolver for SimpleStructNameResolver<'_> {
       })
   }
 
-  fn cache(&mut self, primitive_composition: PrimitiveComposition) {
+  fn cache(&mut self, primitive_composition: DefinedType) {
     self
       .cache
       .update(primitive_composition)
@@ -254,15 +252,17 @@ mod test {
   use crate::environment::PreProcessingEnvironment;
   use crate::pre_processing_cache::PreProcessingCache;
   use crate::primitive_composition::{PrimitiveComposition, SimpleStructNameResolver};
-  use crate::primitive_composition::composite_type::{CompositeType, Member};
-  use crate::primitive_composition::primitive_type::PrimitiveType;
-  use crate::struct_definition::{StructDefinition, StructMember};
+  use crate::type_analysis::composite_type::CompositeType;
+  use crate::type_analysis::defined_type::DefinedType;
+  use crate::type_analysis::member::Member;
+  use crate::type_analysis::primitive_type::PrimitiveType;
+  use crate::type_analysis::type_declaration::TypeDeclaration;
 
   #[test]
   fn test_from_struct_definition() {
-    let struct_definition = StructDefinition::new("Pixel")
-      .with(StructMember::new("x", "u32"))
-      .with(StructMember::new("y", "u32"));
+    let struct_definition = TypeDeclaration::new("Pixel")
+      .with_member(Member::new("x", "u32"))
+      .with_member(Member::new("y", "u32"));
     let u32_type = PrimitiveType::new("u32", 4, "u32");
     let environment = PreProcessingEnvironment::new().with(u32_type.clone());
     let mut cache = PreProcessingCache::new();
@@ -273,7 +273,7 @@ mod test {
         .expect("conversion error");
 
     assert_eq!(
-      PrimitiveComposition::Composite(
+      DefinedType::Composite(
         CompositeType::new("Pixel")
           .with_member(Member::new("x", u32_type.clone()))
           .with_member(Member::new("y", u32_type.clone()))
