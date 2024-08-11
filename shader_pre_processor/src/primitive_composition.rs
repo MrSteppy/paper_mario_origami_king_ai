@@ -12,6 +12,7 @@ use crate::type_analysis::member::Member;
 use crate::type_analysis::named_type::NamedType;
 use crate::type_analysis::primitive_type::PrimitiveType;
 use crate::type_analysis::type_declaration::TypeDeclaration;
+use crate::type_analysis::TypeNameResolver;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum PrimitiveComposition {
@@ -204,12 +205,6 @@ impl Display for ConversionError {
 }
 
 impl Error for ConversionError {}
-
-pub trait TypeNameResolver {
-  fn resolve(&self, name: &str) -> Option<DeclaredType>;
-
-  fn cache(&mut self, primitive_composition: DefinedType);
-}
 
 #[derive(Debug)]
 pub struct SimpleStructNameResolver<'a> {

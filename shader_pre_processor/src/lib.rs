@@ -5,15 +5,15 @@ use std::{fs, io};
 
 use enum_assoc::Assoc;
 
+use crate::environment::PreProcessingEnvironment;
+use crate::primitive_composition::SimpleStructNameResolver;
+use crate::struct_definition::StructDefinition;
+use crate::type_analysis::named_type::NamedType;
 use pre_processing_cache::PreProcessingCache;
 use primitive_composition::PrimitiveComposition;
 use struct_layout::StructLayout;
 use type_analysis::source_location::Declaration;
-
-use crate::environment::PreProcessingEnvironment;
-use crate::primitive_composition::SimpleStructNameResolver;
-use crate::struct_definition::{StructDefinition, StructDefinitionError};
-use crate::type_analysis::named_type::NamedType;
+use type_analysis::TypeDefinitionParseError;
 
 pub mod environment;
 pub mod memory_layout;
@@ -182,7 +182,7 @@ pub enum PreProcessingError {
     line: String,
     detail_message: String,
   },
-  InvalidStructDefinition(Declaration<StructDefinitionError>),
+  InvalidStructDefinition(Declaration<TypeDefinitionParseError>),
   StructNameDuplication(Declaration<StructLayout>),
 }
 

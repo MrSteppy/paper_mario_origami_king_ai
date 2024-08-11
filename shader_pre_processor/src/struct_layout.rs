@@ -1,7 +1,8 @@
-use crate::primitive_composition::{ConversionError, PrimitiveComposition, TypeNameResolver};
+use crate::primitive_composition::{ConversionError, PrimitiveComposition};
 use crate::type_analysis::defined_type::DefinedType;
 use crate::type_analysis::named_type::NamedType;
 use crate::type_analysis::type_declaration::TypeDeclaration;
+use crate::type_analysis::TypeNameResolver;
 
 ///deprecated: Use [`crate::type_analysis::declared_type::DeclaredType`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

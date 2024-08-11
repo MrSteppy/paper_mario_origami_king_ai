@@ -5,6 +5,7 @@ use once_cell_regex::exports::regex::{Captures, Regex};
 use once_cell_regex::regex;
 
 use crate::type_analysis::source_location::{Declaration, DeclarationInfo, SourceLocation};
+use crate::type_analysis::TypeDefinitionParseError;
 use crate::write_member;
 
 ///deprecated: use [`crate::type_analysis::declared_type::DeclaredType`] instead
@@ -42,10 +43,11 @@ impl StructDefinition {
     regex!(r"\s*(?<annotations>(@\S+\s*)*)(?<name>\S+): (?<type>\S+),\s*")
   }
 
+  #[deprecated]
   pub fn from_shader_source<S, L>(
     shader_source: S,
     source_location: L,
-  ) -> Vec<Declaration<Result<StructDefinition, StructDefinitionError>>>
+  ) -> Vec<Declaration<Result<StructDefinition, TypeDefinitionParseError>>>
   where
     S: AsRef<str>,
     L: Into<SourceLocation>,
@@ -71,7 +73,7 @@ impl StructDefinition {
     struct_definitions
   }
 
-  fn from_captures(captures: Captures) -> Result<StructDefinition, StructDefinitionError> {
+  fn from_captures(captures: Captures) -> Result<StructDefinition, TypeDefinitionParseError> {
     let name = captures
       .name("name")
       .expect("missing capture group")
@@ -98,12 +100,12 @@ impl StructDefinition {
           annotation
             .strip_prefix('@')
             .map(|annotation_value| annotation_value.to_string())
-            .ok_or(StructDefinitionError::MissingAnnotationPrefix {
+            .ok_or(TypeDefinitionParseError::MissingAnnotationPrefix {
               member_name: member_name.clone(),
               annotation: annotation.to_string(),
             })
         })
-        .collect::<Result<Vec<_>, StructDefinitionError>>()?;
+        .collect::<Result<Vec<_>, TypeDefinitionParseError>>()?;
       let member_type = captures
         .name("type")
         .expect("missing capture group")
@@ -119,31 +121,6 @@ impl StructDefinition {
     Ok(StructDefinition { name, members })
   }
 }
-
-#[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
-pub enum StructDefinitionError {
-  MissingAnnotationPrefix {
-    member_name: String,
-    annotation: String,
-  },
-}
-
-impl Display for StructDefinitionError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match self {
-      StructDefinitionError::MissingAnnotationPrefix {
-        member_name,
-        annotation,
-      } => write!(
-        f,
-        "annotation on member {member_name} is missing annotation prefix(@): '{annotation}'"
-      ),
-    }
-  }
-}
-
-impl Error for StructDefinitionError {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct StructMember {
