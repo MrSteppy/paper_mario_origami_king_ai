@@ -40,6 +40,9 @@ pub fn run(event_loop: EventLoop<AppEvent>) {
   });
 }
 
+const GENERAL_NAME: &str = "paper_mario_origami_king_ai";
+const INSTANCE_NAME: &str = "main";
+
 #[derive(Debug)]
 struct App {
   state: AppState,
@@ -67,10 +70,25 @@ impl ApplicationHandler<AppEvent> for App {
       .with_title("Paper Mario: The Origami King AI")
       .with_inner_size(PhysicalSize::new(600, 800))
       .with_window_icon(self.app_icon.clone());
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     {
       use winit::platform::windows::WindowAttributesExtWindows;
       window_attributes = window_attributes.with_taskbar_icon(self.app_icon.clone());
+    }
+    #[cfg(unix)]
+    {
+      use winit::platform::x11::ActiveEventLoopExtX11;
+      use winit::platform::wayland::ActiveEventLoopExtWayland;
+      
+      if event_loop.is_x11() {
+        use winit::platform::x11::WindowAttributesExtX11;
+        window_attributes = window_attributes.with_name(GENERAL_NAME, INSTANCE_NAME);
+      }
+      
+      if event_loop.is_wayland() {
+        use winit::platform::wayland::WindowAttributesExtWayland;
+        window_attributes = window_attributes.with_name(GENERAL_NAME, INSTANCE_NAME);
+      }
     }
 
     let window = event_loop
