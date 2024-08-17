@@ -62,8 +62,8 @@ impl Display for MemoryLayout {
 
 #[cfg(test)]
 mod test_memory_layout_creation {
-  use crate::primitive_composition::composite_type::CompositeType;
   use crate::primitive_composition::PrimitiveComposition;
+  use crate::type_analysis::composite_type::CompositeType;
   use crate::type_analysis::member::Member;
   use crate::type_analysis::primitive_type::PrimitiveType;
 

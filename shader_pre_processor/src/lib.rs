@@ -1,17 +1,15 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::path::{Path, PathBuf};
-use std::{fs, io};
-
 use crate::environment::PreProcessingEnvironment;
 use crate::primitive_composition::SimpleStructNameResolver;
 use crate::struct_definition::StructDefinition;
 use crate::type_analysis::named_type::NamedType;
 use enum_assoc::Assoc;
-use once_cell_regex::exports::regex::Regex;
-use once_cell_regex::regex;
 use pre_processing_cache::PreProcessingCache;
 use primitive_composition::PrimitiveComposition;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::num::NonZeroUsize;
+use std::path::{Path, PathBuf};
+use std::{fs, io};
 use struct_layout::StructLayout;
 use type_analysis::source_location::Declaration;
 use type_analysis::TypeDefinitionParseError;
@@ -30,35 +28,26 @@ pub const STMT_PREFIX: &str = "#";
 ///All supported pre-processor statements
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Assoc)]
 #[func(pub fn as_str(&self) -> &str)]
-#[func(pub fn regex(&self) -> &Regex)]
 pub enum Statement {
   ///Mark a file to be ignored by normal shader processing
   #[assoc(as_str = "no-standalone")]
-  #[assoc(regex = regex!(r"(?m)^#no-standalone\s*$"))]
   NoStandalone,
-  ///Include another file -> Copy-paste it into the code, unless it specifies
+  ///<path to file> Include another file -> Copy-paste it into the code, unless it specifies
   /// otherwise. Parameter must be an absolute or relative path denoting a file.
   #[assoc(as_str = "include")]
-  #[assoc(regex = regex!(r"(?m)^#include (?<path>.*?)\s*$"))]
   Include,
   ///If this file gets included, do so only once
   #[assoc(as_str = "once")]
-  #[assoc(regex = regex!(r"(?m)^#once\s*$"))]
   IncludeOnlyOnce,
-  ///Must annotate a struct - indicates the rust equivalent of a type.
+  ///<rust_equivalent> - Must annotate a struct - indicates the rust equivalent of a type.
   #[assoc(as_str = "rust")]
-  #[assoc(regex = regex!(r"(?m)^#rust (?<equivalent>\S+)\s*$"))]
   Rust,
-  ///Must annotate a struct. Generates a serializable representation of the struct, optionally
+  ///\[repr_name] - Must annotate a struct. Generates a serializable representation of the struct, optionally
   /// custom named. Default name is the structs name with a Repr Suffix, ergo for Foo a struct
   /// FooRepr would be generated
   #[assoc(as_str = "data")]
-  #[assoc(regex = regex!(r"(?m)^#data (?<name>\S+)?\s*$"))]
   Data,
 }
-
-//TODO maybe auto generate regex from as_str and have a single arg string
-//TODO method to match Statement in a str and return args and line nr on match
 
 impl Statement {
   pub fn match_line(&self, line: &str) -> Option<StatementInfo> {
@@ -68,6 +57,29 @@ impl Statement {
         arg_str: arg_str.trim().to_string(),
       })
   }
+
+  pub fn find_usages<'a>(
+    &self,
+    shader_source: &'a str,
+  ) -> impl Iterator<Item = StatementUsage> + 'a {
+    let pattern = format!("{STMT_PREFIX}{}", self.as_str());
+    shader_source
+      .lines()
+      .enumerate()
+      .filter_map(move |(line_index, line)| {
+        line.trim_start().strip_prefix(&pattern).map(|arg_str| {
+          let arg_str = arg_str.trim().to_string();
+          let line_nr = unsafe { NonZeroUsize::new_unchecked(line_index + 1) };
+          StatementUsage { line_nr, arg_str }
+        })
+      })
+  }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct StatementUsage {
+  pub line_nr: NonZeroUsize,
+  pub arg_str: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -276,7 +288,8 @@ where
 mod test {
   use crate::environment::PreProcessingEnvironment;
   use crate::pre_processing_cache::PreProcessingCache;
-  use crate::{pre_process_shader, ProcessContext};
+  use crate::{pre_process_shader, ProcessContext, Statement, StatementUsage};
+  use std::num::NonZeroUsize;
 
   #[test]
   fn test_pre_processing() {
@@ -287,5 +300,26 @@ mod test {
       &PreProcessingEnvironment::new(),
     )
     .expect("failed to pre-process valid shader code");
+  }
+
+  #[test]
+  fn test_find_statement_usages() {
+    let source = "#include foo\n  #include bar\n//#include var";
+    let mut usage_iter = Statement::Include.find_usages(source);
+    assert_eq!(
+      Some(StatementUsage {
+        line_nr: NonZeroUsize::new(1).unwrap(),
+        arg_str: "foo".to_string()
+      }),
+      usage_iter.next()
+    );
+    assert_eq!(
+      Some(StatementUsage {
+        line_nr: NonZeroUsize::new(2).unwrap(),
+        arg_str: "bar".to_string()
+      }),
+      usage_iter.next()
+    );
+    assert_eq!(None, usage_iter.next());
   }
 }
