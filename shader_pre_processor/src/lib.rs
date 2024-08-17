@@ -3,12 +3,13 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-use enum_assoc::Assoc;
-
 use crate::environment::PreProcessingEnvironment;
 use crate::primitive_composition::SimpleStructNameResolver;
 use crate::struct_definition::StructDefinition;
 use crate::type_analysis::named_type::NamedType;
+use enum_assoc::Assoc;
+use once_cell_regex::exports::regex::Regex;
+use once_cell_regex::regex;
 use pre_processing_cache::PreProcessingCache;
 use primitive_composition::PrimitiveComposition;
 use struct_layout::StructLayout;
@@ -29,19 +30,31 @@ pub const STMT_PREFIX: &str = "#";
 ///All supported pre-processor statements
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Assoc)]
 #[func(pub fn as_str(&self) -> &str)]
+#[func(pub fn regex(&self) -> &Regex)]
 pub enum Statement {
   ///Mark a file to be ignored by normal shader processing
   #[assoc(as_str = "no-standalone")]
+  #[assoc(regex = regex!(r"(?m)^#no-standalone\s*$"))]
   NoStandalone,
-  ///<file> - Include another file -> Copy-paste it into the code
+  ///Include another file -> Copy-paste it into the code, unless it specifies
+  /// otherwise. Parameter must be an absolute or relative path denoting a file.
   #[assoc(as_str = "include")]
+  #[assoc(regex = regex!(r"(?m)^#include (?<path>.*?)\s*$"))]
   Include,
   ///If this file gets included, do so only once
   #[assoc(as_str = "once")]
+  #[assoc(regex = regex!(r"(?m)^#once\s*$"))]
   IncludeOnlyOnce,
-  ///<struct> [repr-name] - Generate a representation of the struct which can be translated by wgsl_to_wgpu.
-  #[assoc(as_str = "genRepr")]
-  GenRepr,
+  ///Must annotate a struct - indicates the rust equivalent of a type.
+  #[assoc(as_str = "rust")]
+  #[assoc(regex = regex!(r"(?m)^#rust (?<equivalent>\S+)\s*$"))]
+  Rust,
+  ///Must annotate a struct. Generates a serializable representation of the struct, optionally
+  /// custom named. Default name is the structs name with a Repr Suffix, ergo for Foo a struct
+  /// FooRepr would be generated
+  #[assoc(as_str = "data")]
+  #[assoc(regex = regex!(r"(?m)^#data (?<name>\S+)?\s*$"))]
+  Data,
 }
 
 impl Statement {
@@ -74,7 +87,7 @@ where
   let shader_file = shader_file.as_ref();
   let context = context.into();
 
-  let shader_source = fs::read_to_string(shader_file).map_err(|e| PreProcessingError::IO {
+  let orig_shader_source = fs::read_to_string(shader_file).map_err(|e| PreProcessingError::IO {
     error: e,
     file: shader_file.to_path_buf(),
   })?;
@@ -82,7 +95,7 @@ where
   //TODO first handle imports, after that analyse source code
 
   let mut source_code = String::new();
-  for (line_index, line) in shader_source.lines().enumerate() {
+  for (line_index, line) in orig_shader_source.lines().enumerate() {
     let line_nr = line_index + 1;
 
     if Statement::NoStandalone.match_line(line).is_some() {
@@ -119,7 +132,7 @@ where
       continue;
     }
 
-    if let Some(stmt_info) = Statement::GenRepr.match_line(line) {
+    if let Some(stmt_info) = Statement::Data.match_line(line) {
       //make sure next line has definition
       let mut declaration = pre_processing_cache
         .structs()
