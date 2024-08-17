@@ -57,6 +57,9 @@ pub enum Statement {
   Data,
 }
 
+//TODO maybe auto generate regex from as_str and have a single arg string
+//TODO method to match Statement in a str and return args and line nr on match
+
 impl Statement {
   pub fn match_line(&self, line: &str) -> Option<StatementInfo> {
     line
