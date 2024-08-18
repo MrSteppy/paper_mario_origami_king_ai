@@ -2,9 +2,11 @@ use crate::environment::PreProcessingEnvironment;
 use crate::primitive_composition::SimpleStructNameResolver;
 use crate::struct_definition::StructDefinition;
 use crate::type_analysis::named_type::NamedType;
+use crate::type_analysis::source_location::SourceLocation;
 use enum_assoc::Assoc;
 use pre_processing_cache::PreProcessingCache;
 use primitive_composition::PrimitiveComposition;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::num::NonZeroUsize;
@@ -89,6 +91,7 @@ pub struct StatementInfo {
 
 ///Pre-processes a shader file. Will return None when pre-processing is cancelled early because file
 /// has already been included or should not be processed as standalone.
+//TODO fix return type: multiple warns are always possible, additionally either multiple errors or an ok value, which may have source code
 pub fn pre_process_shader<P, C>(
   shader_file: P,
   context: C,
@@ -108,6 +111,19 @@ where
   })?;
 
   //TODO first handle imports, after that analyse source code
+  let mut line_replacements: HashMap<usize, String> = HashMap::new();
+  let no_standalone_usages: Vec<_> = Statement::NoStandalone
+    .find_usages(&orig_shader_source)
+    .collect();
+  if !no_standalone_usages.is_empty() {
+    if context == ProcessContext::Standalone {
+      return Ok(None);
+    }
+
+    for usage in no_standalone_usages {
+      line_replacements.insert(usage.line_nr.get(), usage.arg_str);
+    }
+  }
 
   let mut source_code = String::new();
   for (line_index, line) in orig_shader_source.lines().enumerate() {
@@ -188,6 +204,24 @@ fn create_primitive_composition(
   environment: &PreProcessingEnvironment,
 ) -> PrimitiveComposition {
   todo!()
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct PreProcessingResult {
+  //TODO result -> Result<ProcessedSource, Vec<PreProcessingError>>
+  pub warnings: Vec<PreProcessingWarning>
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct PreProcessingWarning {
+  pub source_location: SourceLocation,
+  pub detail_message: String,
+}
+
+impl Display for PreProcessingWarning {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "[WARNING] {} (at {})", self.detail_message, self.source_location)
+  }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
